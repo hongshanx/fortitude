@@ -1,7 +1,14 @@
-import axios from 'axios';
+import axios, { AxiosError } from 'axios';
 import { config } from '../config/env.js';
 import { AIModel, CompletionRequest, CompletionResponse } from '../types/api.js';
 import { ApiError } from '../middlewares/error-handler.js';
+
+// Interface for LiteLLM API model response
+interface LiteLLMModel {
+  id: string;
+  owned_by: string;
+  [key: string]: any; // For other properties that might be present
+}
 
 // Create axios instance for LiteLLM API
 const litellmApi = axios.create({
@@ -46,11 +53,11 @@ export class LiteLLMService {
         },
         createdAt: new Date().toISOString(),
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('LiteLLM API Error:', error);
       
       // Handle API errors
-      if (error.response) {
+      if (axios.isAxiosError(error) && error.response) {
         const status = error.response.status;
         const data = error.response.data;
         
@@ -68,9 +75,10 @@ export class LiteLLMService {
       }
       
       // Generic error
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       throw new ApiError(
         500,
-        `LiteLLM API error: ${error.message || 'Unknown error'}`,
+        `LiteLLM API error: ${errorMessage}`,
         'LITELLM_API_ERROR'
       );
     }
@@ -89,14 +97,14 @@ export class LiteLLMService {
       const models = response.data.data || [];
       
       // Transform API response to AIModel format
-      return models.map((model: any) => ({
+      return models.map((model: LiteLLMModel) => ({
         id: model.id,
         name: model.id.split('-').map((word: string) => word.charAt(0).toUpperCase() + word.slice(1)).join(' '),
         provider: 'litellm',
         description: `${model.owned_by} model`,
         maxTokens: 100000, // Default value as the API doesn't provide this information
       }));
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('LiteLLM models fetch failed:', error);
       return [];
     }
@@ -114,7 +122,7 @@ export class LiteLLMService {
       // Make a simple models list request to check if API is accessible
       const response = await litellmApi.get('/models');
       return response.data && Array.isArray(response.data.data);
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('LiteLLM availability check failed:', error);
       return false;
     }

@@ -1,4 +1,4 @@
-import axios from 'axios';
+import axios, { AxiosError } from 'axios';
 import { config } from '../config/env.js';
 import { CompletionRequest, CompletionResponse } from '../types/api.js';
 import { ApiError } from '../middlewares/error-handler.js';
@@ -46,11 +46,11 @@ export class DeepSeekService {
         },
         createdAt: new Date().toISOString(),
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('DeepSeek API Error:', error);
       
       // Handle API errors
-      if (error.response) {
+      if (axios.isAxiosError(error) && error.response) {
         const status = error.response.status;
         const data = error.response.data;
         
@@ -68,9 +68,10 @@ export class DeepSeekService {
       }
       
       // Generic error
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       throw new ApiError(
         500,
-        `DeepSeek API error: ${error.message || 'Unknown error'}`,
+        `DeepSeek API error: ${errorMessage}`,
         'DEEPSEEK_API_ERROR'
       );
     }
@@ -88,7 +89,7 @@ export class DeepSeekService {
       // Make a simple models list request to check if API is accessible
       await deepseekApi.get('/models');
       return true;
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('DeepSeek availability check failed:', error);
       return false;
     }

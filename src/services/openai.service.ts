@@ -1,4 +1,5 @@
 import OpenAI from 'openai';
+import { APIError } from 'openai';
 import { config } from '../config/env.js';
 import { CompletionRequest, CompletionResponse } from '../types/api.js';
 import { ApiError } from '../middlewares/error-handler.js';
@@ -41,22 +42,25 @@ export class OpenAIService {
         },
         createdAt: new Date(response.created * 1000).toISOString(),
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('OpenAI API Error:', error);
       
       // Handle API errors
-      if (error.status === 401) {
-        throw new ApiError(401, 'Invalid OpenAI API key', 'OPENAI_UNAUTHORIZED');
-      } else if (error.status === 429) {
-        throw new ApiError(429, 'OpenAI rate limit exceeded', 'OPENAI_RATE_LIMIT');
-      } else if (error.status === 400) {
-        throw new ApiError(400, error.message || 'Bad request to OpenAI API', 'OPENAI_BAD_REQUEST');
+      if (error instanceof APIError) {
+        if (error.status === 401) {
+          throw new ApiError(401, 'Invalid OpenAI API key', 'OPENAI_UNAUTHORIZED');
+        } else if (error.status === 429) {
+          throw new ApiError(429, 'OpenAI rate limit exceeded', 'OPENAI_RATE_LIMIT');
+        } else if (error.status === 400) {
+          throw new ApiError(400, error.message || 'Bad request to OpenAI API', 'OPENAI_BAD_REQUEST');
+        }
       }
       
       // Generic error
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       throw new ApiError(
         500,
-        `OpenAI API error: ${error.message || 'Unknown error'}`,
+        `OpenAI API error: ${errorMessage}`,
         'OPENAI_API_ERROR'
       );
     }
@@ -74,7 +78,7 @@ export class OpenAIService {
       // Make a simple models list request to check if API is accessible
       await openai.models.list();
       return true;
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('OpenAI availability check failed:', error);
       return false;
     }

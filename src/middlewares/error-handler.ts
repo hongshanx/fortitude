@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { ZodError } from 'zod';
+import { ZodError, z } from 'zod';
 import { config } from '../config/env.js';
 
 // Custom error class
@@ -67,7 +67,7 @@ export const notFound = (req: Request, res: Response) => {
 };
 
 // Validation middleware
-export const validateRequest = (schema: any) => {
+export const validateRequest = (schema: z.ZodSchema) => {
   return (req: Request, res: Response, next: NextFunction) => {
     try {
       req.body = schema.parse(req.body);
