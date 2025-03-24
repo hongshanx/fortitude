@@ -17,6 +17,10 @@ const envSchema = z.object({
   // DeepSeek
   DEEPSEEK_API_KEY: z.string(),
   DEEPSEEK_API_BASE_URL: z.string().default('https://api.deepseek.com/v1'),
+  
+  // LiteLLM
+  LITELLM_API_KEY: z.string(),
+  LITELLM_API_BASE_URL: z.string().default('http://localhost:4000'),
 });
 
 // Parse and validate environment variables
@@ -43,5 +47,9 @@ export const config = {
   deepseek: {
     apiKey: env.data.DEEPSEEK_API_KEY,
     baseUrl: env.data.DEEPSEEK_API_BASE_URL,
+  },
+  litellm: {
+    apiKey: env.data.LITELLM_API_KEY,
+    baseUrl: env.data.LITELLM_API_BASE_URL,
   },
 };

@@ -103,7 +103,7 @@ async function checkHealth() {
 async function listModels() {
   console.log('\nFetching available models...');
   
-  rl.question('Filter by provider (openai/deepseek/leave empty for all): ', async (provider) => {
+  rl.question('Filter by provider (openai/deepseek/litellm/leave empty for all): ', async (provider) => {
     const endpoint = provider ? `/api/models?provider=${provider}` : '/api/models';
     const { status, data } = await makeRequest(endpoint);
     

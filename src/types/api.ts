@@ -1,5 +1,5 @@
 // Provider types
-export type AIProvider = 'openai' | 'deepseek';
+export type AIProvider = 'openai' | 'deepseek' | 'litellm';
 
 // Model types
 export interface AIModel {
@@ -53,8 +53,44 @@ export const DEEPSEEK_MODELS: AIModel[] = [
   },
 ];
 
+// LiteLLM models - these will be fetched dynamically from the API
+// This is just a fallback in case the API is not available
+export const LITELLM_MODELS_FALLBACK: AIModel[] = [
+  {
+    id: 'claude-3-opus',
+    name: 'Claude 3 Opus',
+    provider: 'litellm',
+    description: 'Anthropic\'s most powerful model',
+    maxTokens: 200000,
+  },
+  {
+    id: 'claude-3-sonnet',
+    name: 'Claude 3 Sonnet',
+    provider: 'litellm',
+    description: 'Balanced performance and efficiency',
+    maxTokens: 180000,
+  },
+  {
+    id: 'gemini-pro',
+    name: 'Gemini Pro',
+    provider: 'litellm',
+    description: 'Google\'s advanced model',
+    maxTokens: 30720,
+  },
+];
+
+// LiteLLM models will be populated dynamically
+export let LITELLM_MODELS: AIModel[] = [...LITELLM_MODELS_FALLBACK];
+
 // All available models
-export const ALL_MODELS: AIModel[] = [...OPENAI_MODELS, ...DEEPSEEK_MODELS];
+export const getALLModels = (): AIModel[] => [...OPENAI_MODELS, ...DEEPSEEK_MODELS, ...LITELLM_MODELS];
+export let ALL_MODELS: AIModel[] = getALLModels();
+
+// Function to update LiteLLM models
+export const updateLiteLLMModels = (models: AIModel[]): void => {
+  LITELLM_MODELS = models.length > 0 ? models : LITELLM_MODELS_FALLBACK;
+  ALL_MODELS = getALLModels();
+};
 
 // Request types
 export interface CompletionRequest {

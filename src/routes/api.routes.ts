@@ -2,7 +2,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { AIService } from '../services/ai.service.js';
 import { validateRequest } from '../middlewares/error-handler.js';
 import { completionRequestSchema, modelsRequestSchema } from '../types/schemas.js';
-import { ALL_MODELS, OPENAI_MODELS, DEEPSEEK_MODELS } from '../types/api.js';
+import { ALL_MODELS, OPENAI_MODELS, DEEPSEEK_MODELS, LITELLM_MODELS, getALLModels } from '../types/api.js';
 
 // Create router
 const router: Router = Router();
@@ -16,7 +16,8 @@ router.get('/models', async (req, res, next) => {
     const query = modelsRequestSchema.parse(req.query);
     const providers = await AIService.getAvailableProviders();
     
-    let models = [...ALL_MODELS];
+    // Get the latest models including any dynamically fetched ones
+    let models = [...getALLModels()];
     
     // Filter by provider if specified
     if (query.provider) {
@@ -27,6 +28,7 @@ router.get('/models', async (req, res, next) => {
     models = models.filter(model => {
       if (model.provider === 'openai' && !providers.openai) return false;
       if (model.provider === 'deepseek' && !providers.deepseek) return false;
+      if (model.provider === 'litellm' && !providers.litellm) return false;
       return true;
     });
     
@@ -56,6 +58,10 @@ router.get('/providers', async (req, res, next) => {
         deepseek: {
           available: providers.deepseek,
           models: providers.deepseek ? DEEPSEEK_MODELS : [],
+        },
+        litellm: {
+          available: providers.litellm,
+          models: providers.litellm ? LITELLM_MODELS : [],
         },
       },
     });

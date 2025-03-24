@@ -8,7 +8,7 @@ By default, the API is available at `http://localhost:3000`.
 
 ## Authentication
 
-Currently, the API does not require authentication. API keys for OpenAI and DeepSeek are configured server-side.
+Currently, the API does not require authentication. API keys for OpenAI, DeepSeek, and LiteLLM are configured server-side.
 
 ## Endpoints
 
@@ -24,7 +24,7 @@ GET /api/models
 
 | Parameter | Type   | Required | Description                                      |
 |-----------|--------|----------|--------------------------------------------------|
-| provider  | string | No       | Filter models by provider ('openai' or 'deepseek') |
+| provider  | string | No       | Filter models by provider ('openai', 'deepseek', or 'litellm') |
 
 #### Response
 
@@ -55,7 +55,8 @@ GET /api/models
   ],
   "providers": {
     "openai": true,
-    "deepseek": true
+    "deepseek": true,
+    "litellm": true
   }
 }
 ```
@@ -110,6 +111,32 @@ GET /api/providers
           "maxTokens": 32768
         }
       ]
+    },
+    "litellm": {
+      "available": true,
+      "models": [
+        {
+          "id": "claude-3-opus",
+          "name": "Claude 3 Opus",
+          "provider": "litellm",
+          "description": "Anthropic's most powerful model",
+          "maxTokens": 200000
+        },
+        {
+          "id": "claude-3-sonnet",
+          "name": "Claude 3 Sonnet",
+          "provider": "litellm",
+          "description": "Balanced performance and efficiency",
+          "maxTokens": 180000
+        },
+        {
+          "id": "gemini-pro",
+          "name": "Gemini Pro",
+          "provider": "litellm",
+          "description": "Google's advanced model",
+          "maxTokens": 30720
+        }
+      ]
     }
   }
 }
@@ -131,7 +158,7 @@ POST /api/completions
 | prompt      | string | Yes      | The prompt to generate a completion for          |
 | maxTokens   | number | No       | Maximum number of tokens to generate             |
 | temperature | number | No       | Sampling temperature (0-2, default: 0.7)         |
-| provider    | string | No       | Provider override ('openai' or 'deepseek')       |
+| provider    | string | No       | Provider override ('openai', 'deepseek', or 'litellm') |
 
 #### Example Request
 
@@ -177,7 +204,8 @@ GET /api/health
   "timestamp": "2025-03-20T05:20:00.000Z",
   "providers": {
     "openai": true,
-    "deepseek": false
+    "deepseek": false,
+    "litellm": true
   }
 }
 ```
@@ -206,7 +234,9 @@ The API returns appropriate HTTP status codes and error messages in case of fail
 | 400         | MODEL_NOT_FOUND      | Requested model not found                        |
 | 401         | OPENAI_UNAUTHORIZED  | Invalid OpenAI API key                           |
 | 401         | DEEPSEEK_UNAUTHORIZED| Invalid DeepSeek API key                         |
+| 401         | LITELLM_UNAUTHORIZED | Invalid LiteLLM API key                          |
 | 404         | NOT_FOUND            | Endpoint not found                               |
 | 429         | OPENAI_RATE_LIMIT    | OpenAI rate limit exceeded                       |
 | 429         | DEEPSEEK_RATE_LIMIT  | DeepSeek rate limit exceeded                     |
+| 429         | LITELLM_RATE_LIMIT   | LiteLLM rate limit exceeded                      |
 | 500         | INTERNAL_ERROR       | Server error                                     |

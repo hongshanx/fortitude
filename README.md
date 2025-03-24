@@ -1,10 +1,10 @@
 # AI API Server
 
-A Node.js API server that connects to OpenAI and DeepSeek AI models, allowing users to select models and customize prompts to get AI-generated responses.
+A Node.js API server that connects to OpenAI, DeepSeek, and LiteLLM AI models, allowing users to select models and customize prompts to get AI-generated responses.
 
 ## Features
 
-- Connect to multiple AI providers (OpenAI and DeepSeek)
+- Connect to multiple AI providers (OpenAI, DeepSeek, and LiteLLM)
 - Select from various AI models
 - Customize prompts and parameters
 - RESTful API with proper error handling
@@ -20,6 +20,7 @@ A Node.js API server that connects to OpenAI and DeepSeek AI models, allowing us
 - PNPM (Package Manager)
 - ESM Modules
 - OpenAI SDK
+- LiteLLM
 - Axios for API requests
 - Zod for validation
 
@@ -29,6 +30,7 @@ A Node.js API server that connects to OpenAI and DeepSeek AI models, allowing us
 - PNPM installed
 - OpenAI API key (optional)
 - DeepSeek API key (optional)
+- LiteLLM API key (optional)
 
 ## Installation
 
@@ -50,6 +52,8 @@ cp .env.example .env
 ```
 OPENAI_API_KEY=your_openai_api_key_here
 DEEPSEEK_API_KEY=your_deepseek_api_key_here
+LITELLM_API_KEY=your_litellm_api_key_here
+LITELLM_API_BASE_URL=http://localhost:4000
 ```
 
 ## Development
@@ -85,7 +89,7 @@ pnpm start
 Get a list of available AI models.
 
 Query parameters:
-- `provider` (optional): Filter models by provider ('openai' or 'deepseek')
+- `provider` (optional): Filter models by provider ('openai', 'deepseek', or 'litellm')
 
 ### GET /api/providers
 
@@ -102,7 +106,7 @@ Request body:
   "prompt": "Hello, how are you?",
   "maxTokens": 100,
   "temperature": 0.7,
-  "provider": "openai" // Optional, can be inferred from model
+  "provider": "openai" // Optional, can be inferred from model (openai, deepseek, or litellm)
 }
 ```
 
