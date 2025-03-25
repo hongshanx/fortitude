@@ -1,5 +1,5 @@
 // Provider types
-export type AIProvider = 'openai' | 'deepseek' | 'litellm';
+export type AIProvider = 'openai' | 'deepseek' | 'litellm' | 'openai_compatible';
 
 // Model types
 export interface AIModel {
@@ -56,8 +56,39 @@ export const DEEPSEEK_MODELS: AIModel[] = [
 // LiteLLM models will be populated dynamically
 export let LITELLM_MODELS: AIModel[] = [];
 
+// OpenAI-compatible models - default examples, will be customizable
+// using aliyun
+export const OPENAI_COMPATIBLE_MODELS: AIModel[] = [
+  {
+    id: 'llama3.3-70b-instruct',
+    name: 'Llama 3',
+    provider: 'openai_compatible',
+    description: "Meta's Llama 3 model via OpenAI-compatible API",
+    maxTokens:  30000,
+  },
+  {
+    id: 'deepseek-v3',
+    name: 'DeepSeek-V3',
+    provider: 'openai_compatible',
+    description: 'DeepSeek V3 model via OpenAI-compatible API',
+    maxTokens: 57344,
+  },
+  {
+    id: 'qwen-max',
+    name: '通义千问-Max',
+    provider: 'openai_compatible',
+    description: '通义千问-Max model via OpenAI-compatible API',
+    maxTokens: 30720,
+  },
+];
+
 // All available models
-export const getALLModels = (): AIModel[] => [...OPENAI_MODELS, ...DEEPSEEK_MODELS, ...LITELLM_MODELS];
+export const getALLModels = (): AIModel[] => [
+  ...OPENAI_MODELS, 
+  ...DEEPSEEK_MODELS, 
+  ...LITELLM_MODELS,
+  ...OPENAI_COMPATIBLE_MODELS
+];
 export let ALL_MODELS: AIModel[] = getALLModels();
 
 // Function to update LiteLLM models

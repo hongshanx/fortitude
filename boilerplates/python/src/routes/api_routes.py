@@ -42,7 +42,8 @@ def get_models():
         models = [model for model in models if (
             (model.provider != AIProvider.OPENAI or providers["openai"]) and
             (model.provider != AIProvider.DEEPSEEK or providers["deepseek"]) and
-            (model.provider != AIProvider.LITELLM or providers["litellm"])
+            (model.provider != AIProvider.LITELLM or providers["litellm"]) and
+            (model.provider != AIProvider.OPENAI_COMPATIBLE or providers["openai_compatible"])
         )]
         
         # Convert models to dict for JSON response
@@ -74,6 +75,10 @@ def get_providers():
                 "litellm": {
                     "available": providers["litellm"],
                     "models": [model.model_dump() for model in api_types.LITELLM_MODELS] if providers["litellm"] else [],
+                },
+                "openai_compatible": {
+                    "available": providers["openai_compatible"],
+                    "models": [model.model_dump() for model in api_types.OPENAI_COMPATIBLE_MODELS] if providers["openai_compatible"] else [],
                 },
             },
         })

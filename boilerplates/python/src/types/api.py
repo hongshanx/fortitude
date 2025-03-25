@@ -7,6 +7,7 @@ class AIProvider(str, Enum):
     OPENAI = "openai"
     DEEPSEEK = "deepseek"
     LITELLM = "litellm"
+    OPENAI_COMPATIBLE = "openai_compatible"
 
 # Model types
 class AIModel(BaseModel):
@@ -62,9 +63,34 @@ DEEPSEEK_MODELS: List[AIModel] = [
 # LiteLLM models will be populated dynamically from the API
 LITELLM_MODELS: List[AIModel] = []
 
+# OpenAI-compatible models - default examples, will be customizable
+OPENAI_COMPATIBLE_MODELS: List[AIModel] = [
+    AIModel(
+        id='llama3.3-70b-instruct',
+        name='Llama 3',
+        provider='openai_compatible',
+        description="Meta's Llama 3 model via OpenAI-compatible API",
+        maxTokens=30000,
+    ),
+    AIModel(
+        id='deepseek-v3',
+        name='DeepSeek-V3',
+        provider='openai_compatible',
+        description='DeepSeek V3 model via OpenAI-compatible API',
+        maxTokens=57344,
+    ),
+    AIModel(
+        id='qwen-max',
+        name='通义千问-Max',
+        provider='openai_compatible',
+        description='通义千问-Max model via OpenAI-compatible API',
+        maxTokens=30720,
+    ),
+]
+
 # Function to get all models
 def get_all_models() -> List[AIModel]:
-    return OPENAI_MODELS + DEEPSEEK_MODELS + LITELLM_MODELS
+    return OPENAI_MODELS + DEEPSEEK_MODELS + LITELLM_MODELS + OPENAI_COMPATIBLE_MODELS
 
 # All available models
 ALL_MODELS: List[AIModel] = get_all_models()

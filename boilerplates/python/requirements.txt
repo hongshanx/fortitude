@@ -2,5 +2,4 @@ flask[async]==3.0.0
 flask-cors==4.0.0
 python-dotenv==1.0.0
 pydantic==2.5.2
-openai==1.12.0
 requests==2.31.0

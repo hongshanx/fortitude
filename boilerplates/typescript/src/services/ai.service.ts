@@ -2,6 +2,7 @@ import { CompletionRequest, CompletionResponse, ALL_MODELS, updateLiteLLMModels 
 import { OpenAIService } from './openai.service.js';
 import { DeepSeekService } from './deepseek.service.js';
 import { LiteLLMService } from './litellm.service.js';
+import { OpenAICompatibleService } from './openai-compatible.service.js';
 import { ApiError } from '../middlewares/error-handler.js';
 
 export class AIService {
@@ -33,6 +34,8 @@ export class AIService {
         return DeepSeekService.generateCompletion(request);
       case 'litellm':
         return LiteLLMService.generateCompletion(request);
+      case 'openai_compatible':
+        return OpenAICompatibleService.generateCompletion(request);
       default:
         throw new ApiError(500, `Unsupported provider: ${modelInfo.provider}`, 'UNSUPPORTED_PROVIDER');
     }
@@ -42,11 +45,12 @@ export class AIService {
    * Check which AI providers are available
    */
   static async getAvailableProviders() {
-    // Check OpenAI and DeepSeek availability
-    const [openaiAvailable, deepseekAvailable, litellmAvailable] = await Promise.all([
+    // Check all providers' availability
+    const [openaiAvailable, deepseekAvailable, litellmAvailable, openaiCompatibleAvailable] = await Promise.all([
       OpenAIService.checkAvailability(),
       DeepSeekService.checkAvailability(),
       LiteLLMService.checkAvailability(),
+      OpenAICompatibleService.checkAvailability(),
     ]);
     
     // If LiteLLM is available, fetch and update models
@@ -56,7 +60,7 @@ export class AIService {
         updateLiteLLMModels(litellmModels);
       } catch (error) {
         console.error('Failed to fetch LiteLLM models:', error);
-        // Continue with fallback models
+        // Continue with empty models list
       }
     }
     
@@ -64,6 +68,7 @@ export class AIService {
       openai: openaiAvailable,
       deepseek: deepseekAvailable,
       litellm: litellmAvailable,
+      openai_compatible: openaiCompatibleAvailable,
     };
   }
 }

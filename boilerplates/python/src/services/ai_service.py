@@ -10,6 +10,7 @@ from src.middlewares.error_handler import ApiError
 from src.services.openai_service import OpenAIService
 from src.services.deepseek_service import DeepSeekService
 from src.services.litellm_service import LiteLLMService
+from src.services.openai_compatible_service import OpenAICompatibleService
 
 class AIService:
     """Service for coordinating AI providers"""
@@ -41,16 +42,19 @@ class AIService:
             return await DeepSeekService.generate_completion(request)
         elif model_info.provider == AIProvider.LITELLM:
             return await LiteLLMService.generate_completion(request)
+        elif model_info.provider == AIProvider.OPENAI_COMPATIBLE:
+            return await OpenAICompatibleService.generate_completion(request)
         else:
             raise ApiError(500, f"Unsupported provider: {model_info.provider}", "UNSUPPORTED_PROVIDER")
     
     @staticmethod
     async def get_available_providers() -> Dict[str, bool]:
         """Check which AI providers are available"""
-        # Check OpenAI, DeepSeek, and LiteLLM availability
+        # Check all providers' availability
         openai_available = await OpenAIService.check_availability()
         deepseek_available = await DeepSeekService.check_availability()
         litellm_available = await LiteLLMService.check_availability()
+        openai_compatible_available = await OpenAICompatibleService.check_availability()
         
         # If LiteLLM is available, fetch and update models
         if litellm_available:
@@ -65,4 +69,5 @@ class AIService:
             "openai": openai_available,
             "deepseek": deepseek_available,
             "litellm": litellm_available,
+            "openai_compatible": openai_compatible_available,
         }

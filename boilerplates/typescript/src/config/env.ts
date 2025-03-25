@@ -21,6 +21,10 @@ const envSchema = z.object({
   // LiteLLM
   LITELLM_API_KEY: z.string(),
   LITELLM_API_BASE_URL: z.string().default('http://localhost:4000'),
+  
+  // OpenAI-Compatible
+  OPENAI_COMPATIBLE_API_KEY: z.string(),
+  OPENAI_COMPATIBLE_API_BASE_URL: z.string().default('http://localhost:8000/v1'),
 });
 
 // Parse and validate environment variables
@@ -51,5 +55,9 @@ export const config = {
   litellm: {
     apiKey: env.data.LITELLM_API_KEY,
     baseUrl: env.data.LITELLM_API_BASE_URL,
+  },
+  openaiCompatible: {
+    apiKey: env.data.OPENAI_COMPATIBLE_API_KEY,
+    baseUrl: env.data.OPENAI_COMPATIBLE_API_BASE_URL,
   },
 };

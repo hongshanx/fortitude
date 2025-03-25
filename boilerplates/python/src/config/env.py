@@ -31,6 +31,7 @@ class Config(BaseModel):
     openai: ProviderConfig
     deepseek: ProviderConfig
     litellm: ProviderConfig
+    openai_compatible: ProviderConfig
 
 # Load and validate environment variables
 def load_config() -> Config:
@@ -55,11 +56,17 @@ def load_config() -> Config:
             base_url=os.getenv("LITELLM_API_BASE_URL", "http://localhost:4000")
         )
         
+        openai_compatible_config = ProviderConfig(
+            api_key=os.getenv("OPENAI_COMPATIBLE_API_KEY", "your_openai_compatible_api_key_here"),
+            base_url=os.getenv("OPENAI_COMPATIBLE_API_BASE_URL", "http://localhost:8000/v1")
+        )
+        
         return Config(
             server=server_config,
             openai=openai_config,
             deepseek=deepseek_config,
-            litellm=litellm_config
+            litellm=litellm_config,
+            openai_compatible=openai_compatible_config
         )
     except Exception as e:
         print(f"❌ Invalid environment variables: {str(e)}")

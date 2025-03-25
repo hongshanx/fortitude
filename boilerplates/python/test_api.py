@@ -162,10 +162,16 @@ def generate_completion():
     if result['status'] == 200 and 'content' in result['data']:
         print("\n=== Generated Content ===")
         print(result['data']['content'])
-        print("\n=== Usage ===")
-        print(f"Prompt tokens: {result['data']['usage']['prompt_tokens']}")
-        print(f"Completion tokens: {result['data']['usage']['completion_tokens']}")
-        print(f"Total tokens: {result['data']['usage']['total_tokens']}")
+        
+        # Check if usage information is available
+        if 'usage' in result['data'] and result['data']['usage']:
+            usage = result['data']['usage']
+            print("\n=== Usage ===")
+            print(f"Prompt tokens: {usage.get('prompt_tokens', 'Not provided')}")
+            print(f"Completion tokens: {usage.get('completion_tokens', 'Not provided')}")
+            print(f"Total tokens: {usage.get('total_tokens', 'Not provided')}")
+        else:
+            print("\n=== Usage information not available ===")
     else:
         print("Error generating completion:")
         print(json.dumps(result['data'], indent=2))
