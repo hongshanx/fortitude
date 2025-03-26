@@ -35,7 +35,71 @@ flowchart TD
     AIService -->|Return Response| Endpoints
     Endpoints -->|HTTP Response| Client
 ```
-
+```
++----------+     HTTP Request     +------------+
+|  Client  |-------------------->|  API Server |
++----------+                     +------------+
+     ^                                 |
+     |                                 | Route Request
+     |                                 v
+     |                          +-------------+
+     |                          | API Endpoints|
+     |                          +-------------+
+     |                                 |
+     |                                 | Validate Request
+     |                                 v
+     |                          +------------+
+     |                          | AI Service |
+     |                          +------------+
+     |                                 |
+     |                                 | Model Selection
+     |                                 v
+     |                        +------------------+
+     |                        | Select Provider  |
+     |                        +------------------+
+     |                           /    |    \     \
+     |                          /     |     \     \
+     |                         /      |      \     \
+     v                        v       v       v     v
++------------+  +------------+  +----------+  +----------------+
+|OpenAI      |  |DeepSeek    |  |LiteLLM   |  |OpenAI-        |
+|Service     |  |Service     |  |Service   |  |Compatible     |
++------------+  +------------+  +----------+  +----------------+
+     |               |              |               |
+     | HTTP          | HTTP         | HTTP          | HTTP
+     | Request       | Request      | Request       | Request
+     v               v              v               v
++------------+  +------------+  +----------+  +----------------+
+|OpenAI API  |  |DeepSeek API|  |LiteLLM   |  |OpenAI-        |
+|            |  |            |  |API       |  |Compatible API |
++------------+  +------------+  +----------+  +----------------+
+     |               |              |               |
+     | Response      | Response     | Response      | Response
+     v               v              v               v
++------------+  +------------+  +----------+  +----------------+
+|OpenAI      |  |DeepSeek    |  |LiteLLM   |  |OpenAI-        |
+|Service     |  |Service     |  |Service   |  |Compatible     |
++------------+  +------------+  +----------+  +----------------+
+     |               |              |               |
+     | Format        | Format       | Format        | Format
+     | Response      | Response     | Response      | Response
+     v               v              v               v
+                          +------------+
+                          | AI Service |
+                          +------------+
+                                 |
+                                 | Return Response
+                                 v
+                          +-------------+
+                          | API Endpoints|
+                          +-------------+
+                                 |
+                                 | HTTP Response
+                                 v
+                          +----------+
+                          |  Client  |
+                          +----------+
+```
 The diagram above illustrates the workflow of the AI API server:
 1. Client sends an HTTP request to the API server
 2. The server routes the request to the appropriate endpoint
