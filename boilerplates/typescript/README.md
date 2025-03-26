@@ -66,6 +66,40 @@ pnpm dev
 
 The server will run at http://localhost:3000 by default.
 
+## Logic Development
+
+The server's logic is organized in a modular structure:
+
+### Services Layer (`src/services/`)
+- `ai.service.ts`: Base abstract class defining the AI service interface
+- `openai.service.ts`: OpenAI-specific implementation
+- `deepseek.service.ts`: DeepSeek-specific implementation
+- `litellm.service.ts`: LiteLLM integration
+- `openai-compatible.service.ts`: Generic OpenAI-compatible service
+
+To add a new AI provider:
+1. Create a new service class in `src/services/` that extends `AIService`
+2. Implement the required methods: `getModels()` and `createCompletion()`
+3. Register the service in `src/routes/api.routes.ts`
+
+### Types and Schemas (`src/types/`)
+- `api.ts`: API request/response types
+- `schemas.ts`: Zod schemas for validation
+
+To add new functionality:
+1. Define new schemas in `schemas.ts` if needed
+2. Add new route handlers in `api.routes.ts`
+3. Implement the business logic in appropriate service classes
+4. Update the API types in `api.ts`
+
+### Configuration (`src/config/`)
+- `env.ts`: Environment variables and configuration using Zod for validation
+
+To modify configuration:
+1. Add new environment variables to `.env.example`
+2. Update `env.ts` with new configuration options and their Zod schemas
+3. Use `config` object in your code to access typed settings
+
 ## Build
 
 Build the project:

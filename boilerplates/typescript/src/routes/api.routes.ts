@@ -76,8 +76,14 @@ router.get('/providers', async (req, res, next) => {
  */
 router.post('/completions', validateRequest(completionRequestSchema), async (req, res, next) => {
   try {
-    const result = await AIService.generateCompletion(req.body);
-    res.json(result);
+    if (req.body.stream) {
+      // Handle streaming response
+      await AIService.generateStream(req.body, res);
+    } else {
+      // Handle regular response
+      const result = await AIService.generateCompletion(req.body);
+      res.json(result);
+    }
   } catch (error) {
     next(error);
   }

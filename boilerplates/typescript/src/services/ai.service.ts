@@ -4,8 +4,48 @@ import { DeepSeekService } from './deepseek.service.js';
 import { LiteLLMService } from './litellm.service.js';
 import { OpenAICompatibleService } from './openai-compatible.service.js';
 import { ApiError } from '../middlewares/error-handler.js';
+import { Response } from 'express';
 
 export class AIService {
+  /**
+   * Generate a streaming completion using the appropriate service based on the model
+   */
+  static async generateStream(request: CompletionRequest, res: Response): Promise<void> {
+    // Find the model in our list
+    const modelInfo = ALL_MODELS.find(m => m.id === request.model);
+    
+    if (!modelInfo) {
+      throw new ApiError(400, `Model '${request.model}' not found`, 'MODEL_NOT_FOUND');
+    }
+    
+    // If provider is specified, ensure it matches the model's provider
+    if (request.provider && request.provider !== modelInfo.provider) {
+      throw new ApiError(
+        400,
+        `Model '${request.model}' belongs to provider '${modelInfo.provider}', not '${request.provider}'`,
+        'PROVIDER_MODEL_MISMATCH'
+      );
+    }
+    
+    // Route to the appropriate service
+    switch (modelInfo.provider) {
+      case 'openai':
+        await OpenAIService.generateStream(request, res);
+        break;
+      case 'openai_compatible':
+        await OpenAICompatibleService.generateStream(request, res);
+        break;
+      case 'deepseek':
+        await DeepSeekService.generateStream(request, res);
+        break;
+      case 'litellm':
+        await LiteLLMService.generateStream(request, res);
+        break;
+      default:
+        throw new ApiError(500, `Unsupported provider: ${modelInfo.provider}`, 'UNSUPPORTED_PROVIDER');
+    }
+  }
+
   /**
    * Generate a completion using the appropriate service based on the model
    */

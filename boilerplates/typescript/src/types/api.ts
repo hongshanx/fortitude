@@ -104,6 +104,7 @@ export interface CompletionRequest {
   maxTokens?: number;
   temperature?: number;
   provider?: AIProvider; // Optional, can be inferred from model
+  stream?: boolean; // Whether to stream the response
 }
 
 // Response types
@@ -118,6 +119,17 @@ export interface CompletionResponse {
     totalTokens: number;
   };
   createdAt: string;
+}
+
+// Streaming response types
+export interface StreamChunk {
+  id: string;
+  model: string;
+  provider: AIProvider;
+  content: string;
+  createdAt: string;
+  finishReason?: string;
+  isLastChunk: boolean;
 }
 
 // Error response

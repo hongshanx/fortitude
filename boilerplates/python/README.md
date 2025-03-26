@@ -70,6 +70,40 @@ python main.py
 
 The server will run at http://localhost:3000 by default.
 
+## Logic Development
+
+The server's logic is organized in a modular structure:
+
+### Services Layer (`src/services/`)
+- `ai_service.py`: Base abstract class defining the AI service interface
+- `openai_service.py`: OpenAI-specific implementation
+- `deepseek_service.py`: DeepSeek-specific implementation
+- `litellm_service.py`: LiteLLM integration
+- `openai_compatible_service.py`: Generic OpenAI-compatible service
+
+To add a new AI provider:
+1. Create a new service class in `src/services/` that extends `AIService`
+2. Implement the required methods: `get_models()` and `create_completion()`
+3. Register the service in `src/routes/api_routes.py`
+
+### Types and Schemas (`src/types/`)
+- `api.py`: API request/response types
+- `schemas.py`: Pydantic models for validation
+
+To add new functionality:
+1. Define new schemas in `schemas.py` if needed
+2. Add new route handlers in `api_routes.py`
+3. Implement the business logic in appropriate service classes
+4. Update the API types in `api.py`
+
+### Configuration (`src/config/`)
+- `env.py`: Environment variables and configuration
+
+To modify configuration:
+1. Add new environment variables to `.env.example`
+2. Update `env.py` with new configuration options
+3. Use `config` object in your code to access settings
+
 ## API Endpoints
 
 ### GET /api/models

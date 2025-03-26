@@ -6,6 +6,7 @@
  */
 
 import fetch from 'node-fetch';
+import { Readable } from 'stream';
 import readline from 'readline';
 
 // Create readline interface
@@ -20,7 +21,7 @@ const API_BASE_URL = 'http://localhost:3000';
 /**
  * Make a request to the API
  */
-async function makeRequest(endpoint, method = 'GET', body = null) {
+async function makeRequest(endpoint, method = 'GET', body = null, stream = false) {
   const options = {
     method,
     headers: {
@@ -34,12 +35,35 @@ async function makeRequest(endpoint, method = 'GET', body = null) {
 
   try {
     const response = await fetch(`${API_BASE_URL}${endpoint}`, options);
-    const data = await response.json();
-    return { status: response.status, data };
+    
+    if (stream) {
+      return { status: response.status, response };
+    } else {
+      const data = await response.json();
+      return { status: response.status, data };
+    }
   } catch (error) {
     console.error('Error making request:', error.message);
     return { status: 500, data: { error: { message: error.message } } };
   }
+}
+
+/**
+ * Parse a Server-Sent Events line
+ */
+function parseSSELine(line) {
+  if (line.startsWith('data: ')) {
+    const data = line.substring(6).trim();
+    if (data === '[DONE]') {
+      return { done: true };
+    }
+    try {
+      return { data: JSON.parse(data) };
+    } catch (error) {
+      return { error: `Failed to parse JSON: ${data}` };
+    }
+  }
+  return null;
 }
 
 /**
@@ -51,9 +75,10 @@ function showMenu() {
   console.log('2. List available models');
   console.log('3. List available providers');
   console.log('4. Generate a completion');
-  console.log('5. Exit');
+  console.log('5. Generate a streaming completion');
+  console.log('6. Exit');
   
-  rl.question('\nSelect an option (1-5): ', handleMenuSelection);
+  rl.question('\nSelect an option (1-6): ', handleMenuSelection);
 }
 
 /**
@@ -74,6 +99,9 @@ async function handleMenuSelection(choice) {
       await generateCompletion();
       break;
     case '5':
+      await generateStreamingCompletion();
+      break;
+    case '6':
       console.log('Goodbye!');
       rl.close();
       return;
@@ -209,6 +237,117 @@ async function generateCompletion() {
         console.log(JSON.stringify(data, null, 2));
       }
       
+      showMenu();
+    });
+  });
+  
+  return new Promise(() => {}); // Prevent immediate return to menu
+}
+
+/**
+ * Generate a streaming completion
+ */
+async function generateStreamingCompletion() {
+  console.log('\nGenerating a streaming completion...');
+  
+  // Get available models first
+  const { data: modelsData } = await makeRequest('/api/models');
+  const availableModels = modelsData.models || [];
+  
+  if (availableModels.length === 0) {
+    console.log('No models available. Please check your API keys.');
+    return;
+  }
+  
+  console.log('\nAvailable models:');
+  availableModels.forEach((model, index) => {
+    console.log(`${index + 1}. ${model.name} (${model.id}) [${model.provider}]`);
+  });
+  
+  rl.question('\nSelect a model (number): ', (modelIndex) => {
+    const index = parseInt(modelIndex) - 1;
+    
+    if (isNaN(index) || index < 0 || index >= availableModels.length) {
+      console.log('Invalid selection.');
+      showMenu();
+      return;
+    }
+    
+    const selectedModel = availableModels[index];
+    
+    rl.question('\nEnter your prompt: ', async (prompt) => {
+      if (!prompt.trim()) {
+        console.log('Prompt cannot be empty.');
+        showMenu();
+        return;
+      }
+      
+      console.log(`\nGenerating streaming completion using ${selectedModel.name}...`);
+      console.log('(Content will appear as it\'s generated)');
+      console.log('\n=== Generated Content ===');
+      
+      const requestBody = {
+        model: selectedModel.id,
+        prompt: prompt,
+        temperature: 0.7,
+        stream: true
+      };
+      
+      const { status, response } = await makeRequest('/api/completions', 'POST', requestBody, true);
+      
+      if (status !== 200) {
+        console.log(`Error: Status code ${status}`);
+        showMenu();
+        return;
+      }
+      
+      // Process the streaming response
+      let fullContent = '';
+      
+      try {
+        // Create a readable stream from the response body
+        const reader = response.body;
+        
+        // Process the stream
+        for await (const chunk of reader) {
+          const lines = chunk.toString().split('\n');
+          
+          for (const line of lines) {
+            if (!line.trim()) continue;
+            
+            const parsed = parseSSELine(line);
+            if (!parsed) continue;
+            
+            if (parsed.done) break;
+            
+            if (parsed.error) {
+              console.log(`\nError: ${parsed.error}`);
+              continue;
+            }
+            
+            if (parsed.data) {
+              const chunk = parsed.data;
+              if (chunk.content) {
+                const contentDelta = chunk.content;
+                fullContent += contentDelta;
+                process.stdout.write(contentDelta);
+              }
+              
+              if (chunk.isLastChunk) {
+                console.log('\n\n=== Completion finished ===');
+                break;
+              }
+            }
+          }
+        }
+        
+        console.log('\n'); // Add a newline at the end
+        
+      } catch (error) {
+        console.log(`\n\nError during streaming: ${error.message}`);
+      }
+      
+      console.log(`\nFull content length: ${fullContent.length} characters`);
       showMenu();
     });
   });

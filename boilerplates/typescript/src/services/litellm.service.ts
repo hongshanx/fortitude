@@ -1,7 +1,8 @@
 import axios, { AxiosError } from 'axios';
 import { config } from '../config/env.js';
-import { AIModel, CompletionRequest, CompletionResponse } from '../types/api.js';
+import { AIModel, CompletionRequest, CompletionResponse, StreamChunk } from '../types/api.js';
 import { ApiError } from '../middlewares/error-handler.js';
+import { Response } from 'express';
 
 // Interface for LiteLLM API model response
 interface LiteLLMModel {
@@ -20,6 +21,183 @@ const litellmApi = axios.create({
 });
 
 export class LiteLLMService {
+  /**
+   * Generate a streaming completion using LiteLLM API
+   */
+  static async generateStream(request: CompletionRequest, res: Response): Promise<void> {
+    try {
+      // Set headers for SSE
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Connection', 'keep-alive');
+      res.setHeader('X-Accel-Buffering', 'no'); // Disable buffering in Nginx
+
+      console.log('Starting streaming request for model:', request.model);
+      console.log('Base URL:', config.litellm.baseUrl);
+      
+      // Create streaming request
+      const response = await axios.post(
+        `${config.litellm.baseUrl}/chat/completions`,
+        {
+          model: request.model,
+          messages: [
+            { role: 'user', content: request.prompt }
+          ],
+          max_tokens: request.maxTokens,
+          temperature: request.temperature,
+          stream: true,
+        },
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${config.litellm.apiKey}`,
+            'Accept': 'text/event-stream',
+          },
+          responseType: 'stream',
+          timeout: 60000, // 60 second timeout
+        }
+      );
+      
+      console.log('Stream connection established');
+
+      // Process the stream
+      let chunkId = `chatcmpl-${Date.now()}`;
+      let model = request.model;
+      let accumulatedContent = '';
+      
+      console.log('Starting stream processing for model:', model);
+      
+      // Handle the stream data
+      const decoder = new TextDecoder();
+      let buffer = '';
+      
+      response.data.on('data', (chunk: Buffer) => {
+        buffer += decoder.decode(chunk, { stream: true });
+        const lines = buffer.split('\n');
+        
+        // Keep the last partial line in the buffer
+        buffer = lines.pop() || '';
+        
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          
+          if (!line.startsWith('data: ')) {
+            console.log('Unexpected line format:', line);
+            continue;
+          }
+          
+          const data = line.substring(6); // Remove 'data: ' prefix
+          
+          if (data === '[DONE]') {
+            console.log('Stream completed');
+            res.write('data: [DONE]\n\n');
+            return;
+          }
+          
+          try {
+            const parsedData = JSON.parse(data);
+            
+            // Check for error in the response
+            if (parsedData.error) {
+              console.error('LiteLLM API returned error:', parsedData.error);
+              const errorData = {
+                error: {
+                  message: parsedData.error.message || 'Unknown API error',
+                  code: 'LITELLM_API_ERROR',
+                  details: parsedData.error
+                }
+              };
+              res.write(`data: ${JSON.stringify(errorData)}\n\n`);
+              res.write('data: [DONE]\n\n');
+              res.end();
+              return;
+            }
+            
+            // Extract data
+            if (parsedData.id) chunkId = parsedData.id;
+            if (parsedData.model) model = parsedData.model;
+            
+            const content = parsedData.choices?.[0]?.delta?.content || '';
+            const finishReason = parsedData.choices?.[0]?.finish_reason;
+            
+            if (content || finishReason) {
+              // Accumulate content
+              accumulatedContent += content;
+              
+              // Create chunk data
+              const chunkData: StreamChunk = {
+                id: chunkId,
+                model,
+                provider: 'litellm',
+                content,
+                createdAt: new Date().toISOString(),
+                isLastChunk: !!finishReason,
+              };
+              
+              if (finishReason) {
+                chunkData.finishReason = finishReason;
+                console.log('Stream finished. Total content length:', accumulatedContent.length);
+              }
+              
+              // Send the chunk as an SSE event
+              res.write(`data: ${JSON.stringify(chunkData)}\n\n`);
+            }
+          } catch (e: unknown) {
+            console.error('Error parsing LiteLLM stream chunk:', e);
+            console.error('Raw data:', data);
+            
+            const errorData = {
+              error: {
+                message: `Failed to parse stream chunk: ${e instanceof Error ? e.message : 'Unknown error'}`,
+                code: 'STREAM_PARSE_ERROR',
+                details: { raw: data }
+              }
+            };
+            res.write(`data: ${JSON.stringify(errorData)}\n\n`);
+          }
+        }
+      });
+      
+      // Handle end of stream
+      response.data.on('end', () => {
+        res.write('data: [DONE]\n\n');
+        res.end();
+      });
+      
+      // Handle errors
+      response.data.on('error', (err: Error) => {
+        console.error('LiteLLM API Streaming Error:', err);
+        
+        // Send error as an SSE event
+        const errorData = {
+          error: {
+            message: `LiteLLM API error: ${err.message}`,
+            code: 'LITELLM_API_ERROR'
+          }
+        };
+        
+        res.write(`data: ${JSON.stringify(errorData)}\n\n`);
+        res.write('data: [DONE]\n\n');
+        res.end();
+      });
+    } catch (error: unknown) {
+      console.error('LiteLLM API Streaming Error:', error);
+      
+      // Send error as an SSE event
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const errorData = {
+        error: {
+          message: `LiteLLM API error: ${errorMessage}`,
+          code: 'LITELLM_API_ERROR'
+        }
+      };
+      
+      res.write(`data: ${JSON.stringify(errorData)}\n\n`);
+      res.write('data: [DONE]\n\n');
+      res.end();
+    }
+  }
+
   /**
    * Generate a completion using LiteLLM API
    */

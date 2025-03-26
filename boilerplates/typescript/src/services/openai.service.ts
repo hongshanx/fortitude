@@ -1,8 +1,9 @@
 import OpenAI from 'openai';
 import { APIError } from 'openai';
 import { config } from '../config/env.js';
-import { CompletionRequest, CompletionResponse } from '../types/api.js';
+import { CompletionRequest, CompletionResponse, StreamChunk } from '../types/api.js';
 import { ApiError } from '../middlewares/error-handler.js';
+import { Response } from 'express';
 
 // Initialize OpenAI client
 const openai = new OpenAI({
@@ -11,6 +12,86 @@ const openai = new OpenAI({
 });
 
 export class OpenAIService {
+  /**
+   * Generate a streaming completion using OpenAI API
+   */
+  static async generateStream(request: CompletionRequest, res: Response): Promise<void> {
+    try {
+      // Create streaming completion request
+      const stream = await openai.chat.completions.create({
+        model: request.model,
+        messages: [
+          { role: 'user', content: request.prompt }
+        ],
+        max_tokens: request.maxTokens,
+        temperature: request.temperature,
+        stream: true,
+      });
+
+      // Set headers for SSE
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Connection', 'keep-alive');
+      res.setHeader('X-Accel-Buffering', 'no'); // Disable buffering in Nginx
+
+      // Process the stream
+      let accumulatedContent = '';
+      let chunkId = '';
+      let model = request.model;
+      
+      // For each chunk
+      for await (const chunk of stream) {
+        // Extract data
+        if (chunk.id) chunkId = chunk.id;
+        if (chunk.model) model = chunk.model;
+        
+        const content = chunk.choices[0]?.delta?.content || '';
+        const finishReason = chunk.choices[0]?.finish_reason;
+        
+        if (content || finishReason) {
+          // Accumulate content
+          accumulatedContent += content;
+          
+          // Create chunk data
+          const chunkData: StreamChunk = {
+            id: chunkId,
+            model,
+            provider: 'openai',
+            content,
+            createdAt: new Date().toISOString(),
+            isLastChunk: !!finishReason,
+          };
+          
+          if (finishReason) {
+            chunkData.finishReason = finishReason;
+          }
+          
+          // Send the chunk as an SSE event
+          res.write(`data: ${JSON.stringify(chunkData)}\n\n`);
+        }
+      }
+      
+      // End the stream
+      res.write('data: [DONE]\n\n');
+      res.end();
+    } catch (error: unknown) {
+      console.error('OpenAI API Streaming Error:', error);
+      
+      // Send error as an SSE event
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const errorData = {
+        error: {
+          message: `OpenAI API error: ${errorMessage}`,
+          code: 'OPENAI_API_ERROR'
+        }
+      };
+      
+      res.write(`data: ${JSON.stringify(errorData)}\n\n`);
+      res.write('data: [DONE]\n\n');
+      res.end();
+    }
+  }
+
   /**
    * Generate a completion using OpenAI API
    */
