@@ -65,7 +65,7 @@ flowchart TD
     AIService -->|9. Return Response| Endpoints
     Endpoints -->|10. HTTP Response| Client
 ```
-
+```
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                             Client Side                                 │
 │                                                                         │
@@ -153,7 +153,7 @@ flowchart TD
              ┌─────────────────┐
              │ClientApplication│
              └─────────────────┘
-
+```
 The diagram above illustrates the workflow of the AI API server:
 1. Client sends an HTTP request to the API server
 2. The server routes the request to the appropriate endpoint
