@@ -4,9 +4,10 @@ A Python Flask API server that connects to OpenAI, DeepSeek, and LiteLLM AI mode
 
 ## Features
 
-- Connect to multiple AI providers (OpenAI, DeepSeek, and LiteLLM)
+- Connect to multiple AI providers (OpenAI, DeepSeek, LiteLLM, and OpenAI-compatible)
 - Select from various AI models
 - Customize prompts and parameters
+- Support for streaming responses
 - RESTful API with proper error handling
 - Type validation with Pydantic
 - Built with Flask and asyncio
@@ -127,6 +128,20 @@ curl -X POST http://localhost:3000/api/completions \
     "prompt": "Write a short poem about programming"
   }'
 ```
+
+### Generate a Streaming Completion
+
+```bash
+curl -X POST http://localhost:3000/api/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gpt-3.5-turbo",
+    "prompt": "Write a short poem about programming",
+    "stream": true
+  }' --no-buffer
+```
+
+The streaming response will be delivered as Server-Sent Events (SSE), with each chunk of the completion sent as it's generated.
 
 ## License
 

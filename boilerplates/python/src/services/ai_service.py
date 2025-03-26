@@ -1,10 +1,11 @@
-from typing import Dict, List, Any
+from typing import Dict, List, Any, AsyncGenerator
 import src.types.api as api_types
 from src.types.api import (
     CompletionRequest, 
     CompletionResponse, 
     AIProvider, 
-    update_litellm_models
+    update_litellm_models,
+    StreamChunk
 )
 from src.middlewares.error_handler import ApiError
 from src.services.openai_service import OpenAIService
@@ -14,6 +15,54 @@ from src.services.openai_compatible_service import OpenAICompatibleService
 
 class AIService:
     """Service for coordinating AI providers"""
+    
+    @staticmethod
+    async def generate_stream(request: CompletionRequest) -> AsyncGenerator[StreamChunk, None]:
+        """Generate a streaming completion using the appropriate service based on the model"""
+        # Find the model in our list
+        model_info = next((m for m in api_types.ALL_MODELS if m.id == request.model), None)
+        
+        if not model_info:
+            raise ApiError(400, f"Model '{request.model}' not found", "MODEL_NOT_FOUND")
+        
+        # If provider is specified, ensure it matches the model's provider
+        if request.provider and request.provider != model_info.provider:
+            raise ApiError(
+                400,
+                f"Model '{request.model}' belongs to provider '{model_info.provider}', not '{request.provider}'",
+                "PROVIDER_MODEL_MISMATCH"
+            )
+        
+        # Route to the appropriate service
+        if model_info.provider == AIProvider.OPENAI:
+            async for chunk in OpenAIService.generate_stream(request):
+                yield chunk
+        elif model_info.provider == AIProvider.OPENAI_COMPATIBLE:
+            async for chunk in OpenAICompatibleService.generate_stream(request):
+                yield chunk
+        else:
+            # For providers that don't support streaming yet, simulate streaming with the regular completion
+            try:
+                if model_info.provider == AIProvider.DEEPSEEK:
+                    response = await DeepSeekService.generate_completion(request)
+                elif model_info.provider == AIProvider.LITELLM:
+                    response = await LiteLLMService.generate_completion(request)
+                else:
+                    raise ApiError(500, f"Unsupported provider: {model_info.provider}", "UNSUPPORTED_PROVIDER")
+                
+                # Yield the content as a single chunk
+                yield StreamChunk(
+                    id=response.id,
+                    model=response.model,
+                    provider=response.provider,
+                    content=response.content,
+                    created_at=response.created_at,
+                    finish_reason="stop",
+                    is_last_chunk=True
+                )
+            except Exception as e:
+                # Re-raise any exceptions
+                raise e
     
     @staticmethod
     async def generate_completion(request: CompletionRequest) -> CompletionResponse:

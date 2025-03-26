@@ -1,4 +1,4 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, Response, stream_with_context
 from asgiref.sync import async_to_sync
 from src.services.ai_service import AIService
 from src.middlewares.error_handler import validate_request, handle_error
@@ -7,6 +7,8 @@ import src.types.api as api_types
 from src.types.api import (
     AIProvider
 )
+import json
+import asyncio
 
 # Create blueprint
 api_bp = Blueprint('api', __name__)
@@ -90,10 +92,70 @@ def get_providers():
 def generate_completion(validated_data):
     """Generate a completion"""
     try:
+        # Check if streaming is requested
+        if validated_data.stream:
+            return stream_completion(validated_data)
+        
+        # Regular non-streaming completion
         result = async_to_sync(AIService.generate_completion)(validated_data)
         return jsonify(result.model_dump())
     except Exception as e:
         return handle_error(e)
+
+def stream_completion(validated_data):
+    """Stream a completion response"""
+    
+    def generate():
+        """Generator function that yields SSE formatted chunks"""
+        # Create a new event loop for this request
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        
+        try:
+            # Get the async generator
+            async_gen = AIService.generate_stream(validated_data)
+            
+            # Process chunks one by one
+            while True:
+                try:
+                    # Get the next chunk (run the coroutine in the event loop)
+                    chunk = loop.run_until_complete(async_gen.__anext__())
+                    
+                    # Format the chunk as a Server-Sent Event
+                    chunk_data = chunk.model_dump()
+                    yield f"data: {json.dumps(chunk_data)}\n\n"
+                    
+                except StopAsyncIteration:
+                    # End of the stream
+                    break
+                except Exception as e:
+                    # Handle errors in the stream
+                    error_data = {
+                        "error": {
+                            "message": str(e),
+                            "code": getattr(e, "code", "STREAM_ERROR") if hasattr(e, "code") else "STREAM_ERROR"
+                        }
+                    }
+                    yield f"data: {json.dumps(error_data)}\n\n"
+                    break
+            
+            # End the stream
+            yield "data: [DONE]\n\n"
+            
+        finally:
+            # Clean up the event loop
+            loop.close()
+    
+    # Create a streaming response
+    return Response(
+        stream_with_context(generate()),
+        mimetype='text/event-stream',
+        headers={
+            'Cache-Control': 'no-cache',
+            'Connection': 'keep-alive',
+            'X-Accel-Buffering': 'no'  # Disable buffering in Nginx
+        }
+    )
 
 @api_bp.route('/health', methods=['GET'])
 def health_check():

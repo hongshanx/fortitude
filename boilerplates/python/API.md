@@ -116,7 +116,7 @@ GET /api/providers
       "available": true,
       "models": [
         {
-          "id": "claude-3-opus",
+
           "name": "Claude 3 Opus",
           "provider": "litellm",
           "description": "Anthropic's most powerful model",
@@ -152,13 +152,14 @@ POST /api/completions
 
 #### Request Body
 
-| Field       | Type   | Required | Description                                      |
-|-------------|--------|----------|--------------------------------------------------|
-| model       | string | Yes      | The ID of the model to use                       |
-| prompt      | string | Yes      | The prompt to generate a completion for          |
-| max_tokens  | number | No       | Maximum number of tokens to generate             |
-| temperature | number | No       | Sampling temperature (0-2, default: 0.7)         |
-| provider    | string | No       | Provider override ('openai', 'deepseek', or 'litellm') |
+| Field       | Type    | Required | Description                                      |
+|-------------|---------|----------|--------------------------------------------------|
+| model       | string  | Yes      | The ID of the model to use                       |
+| prompt      | string  | Yes      | The prompt to generate a completion for          |
+| max_tokens  | number  | No       | Maximum number of tokens to generate             |
+| temperature | number  | No       | Sampling temperature (0-2, default: 0.7)         |
+| provider    | string  | No       | Provider override ('openai', 'deepseek', 'litellm', or 'openai_compatible') |
+| stream      | boolean | No       | Whether to stream the response (default: false)  |
 
 #### Example Request
 
@@ -172,6 +173,8 @@ POST /api/completions
 ```
 
 #### Response
+
+For non-streaming requests:
 
 ```json
 {
@@ -187,6 +190,33 @@ POST /api/completions
   "created_at": "2025-03-20T05:20:00.000Z"
 }
 ```
+
+For streaming requests (`stream: true`), the response is a stream of Server-Sent Events (SSE). Each event contains a chunk of the completion:
+
+```
+data: {"id":"cmpl-abc123","model":"gpt-3.5-turbo","provider":"openai","content":"In ","created_at":"2025-03-20T05:20:00.000Z","is_last_chunk":false}
+
+data: {"id":"cmpl-abc123","model":"gpt-3.5-turbo","provider":"openai","content":"lines ","created_at":"2025-03-20T05:20:00.000Z","is_last_chunk":false}
+
+data: {"id":"cmpl-abc123","model":"gpt-3.5-turbo","provider":"openai","content":"of ","created_at":"2025-03-20T05:20:00.000Z","is_last_chunk":false}
+
+... more chunks ...
+
+data: {"id":"cmpl-abc123","model":"gpt-3.5-turbo","provider":"openai","content":"heroes.","created_at":"2025-03-20T05:20:00.000Z","finish_reason":"stop","is_last_chunk":true}
+
+data: [DONE]
+```
+
+Each chunk contains:
+- `id`: The completion ID
+- `model`: The model used
+- `provider`: The AI provider
+- `content`: The chunk of text
+- `created_at`: Timestamp
+- `finish_reason`: Reason for completion (only in the last chunk)
+- `is_last_chunk`: Boolean indicating if this is the last chunk
+
+The stream ends with a `data: [DONE]` message.
 
 ### Health Check
 

@@ -9,6 +9,7 @@ class CompletionRequestSchema(BaseModel):
     max_tokens: Optional[int] = Field(None, gt=0, le=32000)
     temperature: Optional[float] = Field(0.7, ge=0, le=2)
     provider: Optional[AIProvider] = None
+    stream: Optional[bool] = False
     
     @field_validator('model')
     @classmethod

@@ -2,12 +2,160 @@ import requests
 import os
 import json
 from src.config.env import config
-from src.types.api import CompletionRequest, CompletionResponse, AIProvider, UsageInfo
+from src.types.api import CompletionRequest, CompletionResponse, AIProvider, UsageInfo, StreamChunk
 from src.middlewares.error_handler import ApiError
 from datetime import datetime
+from typing import AsyncGenerator, Dict, Any
 
 class OpenAICompatibleService:
     """Service for interacting with OpenAI-compatible APIs"""
+    
+    @staticmethod
+    async def generate_stream(request: CompletionRequest) -> AsyncGenerator[StreamChunk, None]:
+        """Generate a streaming completion using OpenAI-compatible API"""
+        try:
+            # Prepare headers
+            headers = {
+                "Authorization": f"Bearer {config.openai_compatible.api_key}",
+                "Content-Type": "application/json",
+                "Accept": "text/event-stream"
+            }
+            
+            # Prepare request payload
+            payload = {
+                "model": request.model,
+                "messages": [
+                    {"role": "user", "content": request.prompt}
+                ],
+                "temperature": request.temperature,
+                "stream": True
+            }
+            
+            # Add max_tokens if specified
+            if request.max_tokens:
+                payload["max_tokens"] = request.max_tokens
+            
+            # Make the API request with streaming
+            response = requests.post(
+                f"{config.openai_compatible.base_url}/chat/completions",
+                headers=headers,
+                json=payload,
+                stream=True,
+                timeout=60  # Longer timeout for completions
+            )
+            
+            # Check for HTTP errors
+            response.raise_for_status()
+            
+            # Process the streaming response
+            chunk_id = f"compat-{datetime.now().timestamp()}"
+            model = request.model
+            accumulated_content = ""
+            
+            # Process each line in the stream
+            for line in response.iter_lines():
+                if not line:
+                    continue
+                
+                # Remove 'data: ' prefix
+                if line.startswith(b"data: "):
+                    line = line[6:]
+                
+                # Skip [DONE] message
+                if line.strip() == b"[DONE]":
+                    # Yield the final chunk with is_last_chunk=True
+                    yield StreamChunk(
+                        id=chunk_id,
+                        model=model,
+                        provider=AIProvider.OPENAI_COMPATIBLE,
+                        content=accumulated_content,
+                        created_at=datetime.now().isoformat(),
+                        finish_reason="stop",
+                        is_last_chunk=True
+                    )
+                    break
+                
+                try:
+                    # Parse the JSON data
+                    data = json.loads(line)
+                    
+                    # Extract relevant information
+                    if "id" in data:
+                        chunk_id = data["id"]
+                    if "model" in data:
+                        model = data["model"]
+                    
+                    # Extract content delta
+                    delta = data.get("choices", [{}])[0].get("delta", {})
+                    content_delta = delta.get("content", "")
+                    
+                    if content_delta:
+                        accumulated_content += content_delta
+                        
+                        # Yield the chunk
+                        yield StreamChunk(
+                            id=chunk_id,
+                            model=model,
+                            provider=AIProvider.OPENAI_COMPATIBLE,
+                            content=content_delta,
+                            created_at=datetime.now().isoformat(),
+                            finish_reason=None,
+                            is_last_chunk=False
+                        )
+                    
+                    # Check for finish reason
+                    finish_reason = data.get("choices", [{}])[0].get("finish_reason")
+                    if finish_reason:
+                        # Yield the final chunk with is_last_chunk=True
+                        yield StreamChunk(
+                            id=chunk_id,
+                            model=model,
+                            provider=AIProvider.OPENAI_COMPATIBLE,
+                            content="",
+                            created_at=datetime.now().isoformat(),
+                            finish_reason=finish_reason,
+                            is_last_chunk=True
+                        )
+                        break
+                        
+                except json.JSONDecodeError:
+                    print(f"Failed to parse JSON: {line}")
+                    continue
+                
+        except requests.exceptions.HTTPError as e:
+            print(f"OpenAI-compatible API HTTP Error: {e}")
+            
+            # Handle API errors based on status code
+            status_code = e.response.status_code if hasattr(e, 'response') else 500
+            
+            if status_code == 401:
+                raise ApiError(401, "Invalid OpenAI-compatible API key", "OPENAI_COMPATIBLE_UNAUTHORIZED")
+            elif status_code == 429:
+                raise ApiError(429, "OpenAI-compatible rate limit exceeded", "OPENAI_COMPATIBLE_RATE_LIMIT")
+            elif status_code == 400:
+                error_message = e.response.json().get("error", {}).get("message", str(e)) if hasattr(e, 'response') else str(e)
+                raise ApiError(400, error_message or "Bad request to OpenAI-compatible API", "OPENAI_COMPATIBLE_BAD_REQUEST")
+            else:
+                # Generic error
+                raise ApiError(
+                    status_code,
+                    f"OpenAI-compatible API error: {str(e)}",
+                    "OPENAI_COMPATIBLE_API_ERROR"
+                )
+        except requests.exceptions.RequestException as e:
+            print(f"OpenAI-compatible API Request Error: {e}")
+            raise ApiError(
+                500,
+                f"OpenAI-compatible API connection error: {str(e)}",
+                "OPENAI_COMPATIBLE_CONNECTION_ERROR"
+            )
+        except Exception as e:
+            print(f"OpenAI-compatible API Unexpected Error: {e}")
+            raise ApiError(
+                500,
+                f"OpenAI-compatible API unexpected error: {str(e)}",
+                "OPENAI_COMPATIBLE_UNEXPECTED_ERROR"
+            )
     
     @staticmethod
     async def generate_completion(request: CompletionRequest) -> CompletionResponse:

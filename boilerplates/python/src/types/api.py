@@ -110,6 +110,7 @@ class CompletionRequest(BaseModel):
     max_tokens: Optional[int] = None
     temperature: Optional[float] = 0.7
     provider: Optional[AIProvider] = None
+    stream: Optional[bool] = False
 
 # Usage information
 class UsageInfo(BaseModel):
@@ -125,6 +126,16 @@ class CompletionResponse(BaseModel):
     content: str
     usage: UsageInfo
     created_at: str
+
+# Streaming response types
+class StreamChunk(BaseModel):
+    id: str
+    model: str
+    provider: AIProvider
+    content: str
+    created_at: str
+    finish_reason: Optional[str] = None
+    is_last_chunk: bool = False
 
 # Error response
 class ErrorDetail(BaseModel):
