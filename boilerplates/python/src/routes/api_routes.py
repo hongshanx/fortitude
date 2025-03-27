@@ -18,9 +18,9 @@ from src.types.api import (
     AIModel,
     AIProvider,
     DEEPSEEK_MODELS,
-    LITELLM_MODELS,
-    OPENAI_COMPATIBLE_MODELS,
     OPENAI_MODELS,
+    get_litellm_models,
+    get_openai_compatible_models,
     get_all_models,
 )
 from src.types.schemas import CompletionRequestSchema
@@ -132,14 +132,14 @@ def get_providers() -> Tuple[dict, int]:
                 "litellm": {
                     "available": providers["litellm"],
                     "models": get_provider_models(
-                        LITELLM_MODELS,
+                        get_litellm_models(),
                         providers["litellm"]
                     ),
                 },
                 "openai_compatible": {
                     "available": providers["openai_compatible"],
                     "models": get_provider_models(
-                        OPENAI_COMPATIBLE_MODELS,
+                        get_openai_compatible_models(),
                         providers["openai_compatible"]
                     ),
                 },

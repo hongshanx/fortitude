@@ -17,7 +17,7 @@ from src.types.api import (
     CompletionRequest,
     CompletionResponse,
     StreamChunk,
-    ALL_MODELS,
+    get_all_models,
     update_litellm_models,
 )
 
@@ -38,7 +38,7 @@ class AIService:
         Raises:
             ApiError: If the model is not found or provider mismatch occurs.
         """
-        model_info = next((m for m in ALL_MODELS if m.id == request.model), None)
+        model_info = next((m for m in get_all_models() if m.id == request.model), None)
 
         if not model_info:
             raise ApiError(400, f"Model '{request.model}' not found", "MODEL_NOT_FOUND")

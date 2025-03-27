@@ -101,7 +101,6 @@ class ModelRegistry:
                 max_tokens=30720,
             ),
         ]
-        self._all_models = self._get_all_models()
 
     def _get_all_models(self) -> List[AIModel]:
         """Get a list of all available AI models.
@@ -123,7 +122,7 @@ class ModelRegistry:
         Returns:
             List[AIModel]: All registered models.
         """
-        return self._all_models
+        return self._get_all_models()
 
     @property
     def litellm_models(self) -> List[AIModel]:
@@ -150,16 +149,28 @@ class ModelRegistry:
             models: List of AIModel objects representing available LiteLLM models.
         """
         self._litellm_models = models if models else []
-        self._all_models = self._get_all_models()
 
 
 # Initialize the model registry
 model_registry = ModelRegistry()
 
-# Export constants and functions
-LITELLM_MODELS = model_registry.litellm_models
-OPENAI_COMPATIBLE_MODELS = model_registry.openai_compatible_models
-ALL_MODELS = model_registry.all_models
+
+def get_litellm_models() -> List[AIModel]:
+    """Get the current list of LiteLLM models.
+
+    Returns:
+        List[AIModel]: Current list of LiteLLM models.
+    """
+    return model_registry.litellm_models
+
+
+def get_openai_compatible_models() -> List[AIModel]:
+    """Get the current list of OpenAI-compatible models.
+
+    Returns:
+        List[AIModel]: Current list of OpenAI-compatible models.
+    """
+    return model_registry.openai_compatible_models
 
 
 def get_all_models() -> List[AIModel]:
