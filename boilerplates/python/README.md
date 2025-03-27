@@ -70,6 +70,79 @@ python main.py
 
 The server will run at http://localhost:3000 by default.
 
+## Code Quality
+
+### Running Pylint
+
+Check code quality with pylint:
+
+```bash
+pylint $(git ls-files 'boilerplates/python/*.py')
+```
+
+### Fixing Common Pylint Errors
+
+1. **Missing Docstrings** (C0114, C0115, C0116):
+   ```python
+   """Module docstring."""
+   
+   class MyClass:
+       """Class docstring."""
+       
+       def my_method(self):
+           """Method docstring."""
+           pass
+   ```
+
+2. **Invalid Names** (C0103):
+   - Use `snake_case` for functions and variables
+   - Use `PascalCase` for classes
+   - Use `UPPER_CASE` for constants
+
+3. **Too Many Arguments** (R0913):
+   - Use dataclasses or Pydantic models to group related parameters
+   - Consider breaking down complex functions
+
+4. **Too Many Instance Attributes** (R0902):
+   - Break large classes into smaller ones
+   - Use composition over inheritance
+
+5. **Too Many Local Variables** (R0914):
+   - Break down complex functions
+   - Use helper methods for clarity
+
+6. **Line Too Long** (C0301):
+   - Break long lines at 100 characters
+   - Use line continuation with parentheses
+   - Format long strings with multiple lines
+
+7. **Import Order** (C0411):
+   ```python
+   # Standard library imports
+   import os
+   import sys
+   
+   # Third-party imports
+   import requests
+   from pydantic import BaseModel
+   
+   # Local imports
+   from .models import User
+   ```
+
+To disable specific warnings in code:
+```python
+# pylint: disable=specific-warning-code
+code_that_triggers_warning
+# pylint: enable=specific-warning-code
+```
+
+Or in `.pylintrc`:
+```ini
+[MESSAGES CONTROL]
+disable=C0111,C0103
+```
+
 ## Logic Development
 
 The server's logic is organized in a modular structure:

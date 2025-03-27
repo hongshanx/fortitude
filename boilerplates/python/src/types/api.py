@@ -1,21 +1,33 @@
-from enum import Enum
-from typing import List, Dict, Optional, Union
-from pydantic import BaseModel, Field
+"""API types and models for the AI service.
 
-# Provider types
+This module defines the core data structures and types used throughout the API,
+including models, providers, requests, and responses.
+"""
+
+from enum import Enum
+from typing import List, Optional
+
+from pydantic import BaseModel
+
+
 class AIProvider(str, Enum):
+    """Supported AI service providers."""
+
     OPENAI = "openai"
     DEEPSEEK = "deepseek"
     LITELLM = "litellm"
     OPENAI_COMPATIBLE = "openai_compatible"
 
-# Model types
+
 class AIModel(BaseModel):
+    """AI model configuration and metadata."""
+
     id: str
     name: str
     provider: AIProvider
     description: Optional[str] = None
     max_tokens: Optional[int] = None
+
 
 # OpenAI models
 OPENAI_MODELS: List[AIModel] = [
@@ -60,51 +72,117 @@ DEEPSEEK_MODELS: List[AIModel] = [
     ),
 ]
 
-# LiteLLM models will be populated dynamically from the API
-LITELLM_MODELS: List[AIModel] = []
+class ModelRegistry:
+    """Registry for managing AI models from different providers."""
 
-# OpenAI-compatible models - default examples, will be customizable
-OPENAI_COMPATIBLE_MODELS: List[AIModel] = [
-    AIModel(
-        id='llama3.3-70b-instruct',
-        name='Llama 3',
-        provider='openai_compatible',
-        description="Meta's Llama 3 model via OpenAI-compatible API",
-        maxTokens=30000,
-    ),
-    AIModel(
-        id='deepseek-v3',
-        name='DeepSeek-V3',
-        provider='openai_compatible',
-        description='DeepSeek V3 model via OpenAI-compatible API',
-        maxTokens=57344,
-    ),
-    AIModel(
-        id='qwen-max',
-        name='通义千问-Max',
-        provider='openai_compatible',
-        description='通义千问-Max model via OpenAI-compatible API',
-        maxTokens=30720,
-    ),
-]
+    def __init__(self):
+        """Initialize the model registry with default models."""
+        self._litellm_models: List[AIModel] = []
+        self._openai_compatible_models: List[AIModel] = [
+            AIModel(
+                id='llama3.3-70b-instruct',
+                name='Llama 3',
+                provider=AIProvider.OPENAI_COMPATIBLE,
+                description="Meta's Llama 3 model via OpenAI-compatible API",
+                max_tokens=30000,
+            ),
+            AIModel(
+                id='deepseek-v3',
+                name='DeepSeek-V3',
+                provider=AIProvider.OPENAI_COMPATIBLE,
+                description='DeepSeek V3 model via OpenAI-compatible API',
+                max_tokens=57344,
+            ),
+            AIModel(
+                id='qwen-max',
+                name='通义千问-Max',
+                provider=AIProvider.OPENAI_COMPATIBLE,
+                description='通义千问-Max model via OpenAI-compatible API',
+                max_tokens=30720,
+            ),
+        ]
+        self._all_models = self._get_all_models()
 
-# Function to get all models
+    def _get_all_models(self) -> List[AIModel]:
+        """Get a list of all available AI models.
+
+        Returns:
+            List[AIModel]: Combined list of models from all providers.
+        """
+        return (
+            OPENAI_MODELS +
+            DEEPSEEK_MODELS +
+            self._litellm_models +
+            self._openai_compatible_models
+        )
+
+    @property
+    def all_models(self) -> List[AIModel]:
+        """Get all available models.
+
+        Returns:
+            List[AIModel]: All registered models.
+        """
+        return self._all_models
+
+    @property
+    def litellm_models(self) -> List[AIModel]:
+        """Get LiteLLM models.
+
+        Returns:
+            List[AIModel]: Registered LiteLLM models.
+        """
+        return self._litellm_models
+
+    @property
+    def openai_compatible_models(self) -> List[AIModel]:
+        """Get OpenAI-compatible models.
+
+        Returns:
+            List[AIModel]: Registered OpenAI-compatible models.
+        """
+        return self._openai_compatible_models
+
+    def update_litellm_models(self, models: List[AIModel]) -> None:
+        """Update the list of available LiteLLM models.
+
+        Args:
+            models: List of AIModel objects representing available LiteLLM models.
+        """
+        self._litellm_models = models if models else []
+        self._all_models = self._get_all_models()
+
+
+# Initialize the model registry
+model_registry = ModelRegistry()
+
+# Export constants and functions
+LITELLM_MODELS = model_registry.litellm_models
+OPENAI_COMPATIBLE_MODELS = model_registry.openai_compatible_models
+ALL_MODELS = model_registry.all_models
+
+
 def get_all_models() -> List[AIModel]:
-    return OPENAI_MODELS + DEEPSEEK_MODELS + LITELLM_MODELS + OPENAI_COMPATIBLE_MODELS
+    """Get a list of all available AI models.
 
-# All available models
-ALL_MODELS: List[AIModel] = get_all_models()
+    Returns:
+        List[AIModel]: Combined list of models from all providers.
+    """
+    return model_registry.all_models
 
-# Function to update LiteLLM models
+
 def update_litellm_models(models: List[AIModel]) -> None:
-    global LITELLM_MODELS, ALL_MODELS
-    LITELLM_MODELS = models if models else []
-    print("LITELLM_MODELS", LITELLM_MODELS)
-    ALL_MODELS = get_all_models()
-    print("ALL_MODELS2", ALL_MODELS)
+    """Update the list of available LiteLLM models.
 
-# Request types
+    Args:
+        models: List of AIModel objects representing available LiteLLM models.
+    """
+    model_registry.update_litellm_models(models)
+
+
 class CompletionRequest(BaseModel):
+    """Request parameters for generating completions."""
+
     model: str
     prompt: str
     max_tokens: Optional[int] = None
@@ -112,14 +190,18 @@ class CompletionRequest(BaseModel):
     provider: Optional[AIProvider] = None
     stream: Optional[bool] = False
 
-# Usage information
+
 class UsageInfo(BaseModel):
+    """Token usage information for API requests."""
+
     prompt_tokens: int = 0
     completion_tokens: int = 0
     total_tokens: int = 0
 
-# Response types
+
 class CompletionResponse(BaseModel):
+    """Response format for completion requests."""
+
     id: str
     model: str
     provider: AIProvider
@@ -127,8 +209,10 @@ class CompletionResponse(BaseModel):
     usage: UsageInfo
     created_at: str
 
-# Streaming response types
+
 class StreamChunk(BaseModel):
+    """Individual chunk in a streaming response."""
+
     id: str
     model: str
     provider: AIProvider
@@ -137,11 +221,16 @@ class StreamChunk(BaseModel):
     finish_reason: Optional[str] = None
     is_last_chunk: bool = False
 
-# Error response
+
 class ErrorDetail(BaseModel):
+    """Detailed error information."""
+
     message: str
     code: Optional[str] = None
     type: Optional[str] = None
 
+
 class ErrorResponse(BaseModel):
+    """Standard error response format."""
+
     error: ErrorDetail
