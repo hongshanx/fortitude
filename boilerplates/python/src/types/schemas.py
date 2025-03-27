@@ -58,3 +58,29 @@ class ModelsRequestSchema(BaseModel):
     """
 
     provider: Optional[AIProvider] = None
+
+
+class StockPredictionRequestSchema(BaseModel):
+    """Schema for stock prediction request validation.
+
+    Attributes:
+        ticker: The stock ticker symbol to analyze
+    """
+
+    ticker: str = Field(..., min_length=1, max_length=10, description="Stock ticker symbol")
+
+
+class StockPredictionResponseSchema(BaseModel):
+    """Schema for stock prediction response.
+
+    Attributes:
+        ticker: The stock ticker symbol that was analyzed
+        prediction: The predicted direction (up/down)
+        confidence: Confidence score between 0 and 1
+        summary: Brief summary of the analysis
+    """
+
+    ticker: str
+    prediction: str = Field(..., pattern="^(up|down)$")
+    confidence: float = Field(..., ge=0, le=1)
+    summary: str
