@@ -54,6 +54,7 @@ def root() -> dict:
             "providers": "/api/providers",
             "completions": "/api/completions",
             "health": "/api/health",
+            "predict_stock": "/api/predict/stock",
         },
     })
 
