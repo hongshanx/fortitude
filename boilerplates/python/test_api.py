@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
+# pylint: disable=too-many-locals, too-many-branches, too-many-statements, too-many-return-statements, broad-exception-caught, duplicate-code
 
 """
 Simple test script for the AI API Server
 Usage: python test_api.py
 """
 
-import requests
 import json
 import sys
-import time
-import re
+
+import requests
 
 # Base URL for the API
 API_BASE_URL = 'http://localhost:3000'
@@ -20,12 +20,13 @@ def make_request(endpoint, method='GET', body=None, stream=False):
         'headers': {
             'Content-Type': 'application/json',
         },
-        'stream': stream
+        'stream': stream,
+        'timeout': 30
     }
-    
+
     if body:
         options['json'] = body
-    
+
     try:
         if method == 'GET':
             response = requests.get(f"{API_BASE_URL}{endpoint}", **options)
@@ -34,15 +35,22 @@ def make_request(endpoint, method='GET', body=None, stream=False):
         else:
             print(f"Unsupported method: {method}")
             return {'status': 400, 'data': {'error': {'message': 'Unsupported method'}}}
-        
+
         if stream:
             return {'status': response.status_code, 'response': response}
-        else:
-            return {'status': response.status_code, 'data': response.json()}
-    except Exception as e:
-        print(f"Error making request: {str(e)}")
-        return {'status': 500, 'data': {'error': {'message': str(e)}}}
-
+        return {'status': response.status_code, 'data': response.json()}
+    except requests.exceptions.ConnectionError as e:
+        print(f"Connection error: {str(e)}")
+        return {'status': 503, 'data': {'error': {'message': 'Service unavailable'}}}
+    except requests.exceptions.Timeout as e:
+        print(f"Request timeout: {str(e)}")
+        return {'status': 504, 'data': {'error': {'message': 'Request timed out'}}}
+    except requests.exceptions.RequestException as e:
+        print(f"Request error: {str(e)}")
+        return {'status': 500, 'data': {'error': {'message': 'Failed to make request'}}}
+    except json.JSONDecodeError as e:
+        print(f"Invalid JSON response: {str(e)}")
+        return {'status': 500, 'data': {'error': {'message': 'Invalid response format'}}}
 def parse_sse_line(line):
     """Parse a Server-Sent Events line"""
     if line.startswith(b'data: '):
@@ -64,7 +72,6 @@ def show_menu():
     print("4. Generate a completion")
     print("5. Generate a streaming completion")
     print("6. Exit")
-    
     choice = input("\nSelect an option (1-6): ")
     handle_menu_selection(choice)
 
@@ -85,15 +92,12 @@ def handle_menu_selection(choice):
         sys.exit(0)
     else:
         print("Invalid option. Please try again.")
-    
     show_menu()
 
 def check_health():
     """Check API health"""
     print("\nChecking API health...")
-    
     result = make_request('/api/health')
-    
     print(f"Status: {result['status']}")
     print("Response:")
     print(json.dumps(result['data'], indent=2))
@@ -101,15 +105,11 @@ def check_health():
 def list_models():
     """List available models"""
     print("\nFetching available models...")
-    
     provider = input("Filter by provider (openai/deepseek/litellm/leave empty for all): ")
-    
     endpoint = f"/api/models?provider={provider}" if provider else "/api/models"
     result = make_request(endpoint)
-    
     print(f"Status: {result['status']}")
     print("Available Models:")
-    
     if 'models' in result['data'] and result['data']['models']:
         for model in result['data']['models']:
             description = model.get('description', 'No description')
@@ -120,12 +120,9 @@ def list_models():
 def list_providers():
     """List available providers"""
     print("\nFetching available providers...")
-    
     result = make_request('/api/providers')
-    
     print(f"Status: {result['status']}")
     print("Available Providers:")
-    
     if 'providers' in result['data']:
         for provider, info in result['data']['providers'].items():
             print(f"- {provider}: {'Available' if info['available'] else 'Not available'}")
@@ -138,19 +135,15 @@ def list_providers():
 def generate_completion():
     """Generate a completion"""
     print("\nGenerating a completion...")
-    
     # Get available models first
     models_result = make_request('/api/models')
     available_models = models_result['data'].get('models', [])
-    
     if not available_models:
         print("No models available. Please check your API keys.")
         return
-    
     print("\nAvailable models:")
     for i, model in enumerate(available_models):
         print(f"{i + 1}. {model['name']} ({model['id']}) [{model['provider']}]")
-    
     model_index = input("\nSelect a model (number): ")
     try:
         index = int(model_index) - 1
@@ -160,30 +153,22 @@ def generate_completion():
     except ValueError:
         print("Invalid selection.")
         return
-    
     selected_model = available_models[index]
-    
     prompt = input("\nEnter your prompt: ")
     if not prompt.strip():
         print("Prompt cannot be empty.")
         return
-    
     print(f"\nGenerating completion using {selected_model['name']}...")
-    
     request_body = {
         "model": selected_model['id'],
         "prompt": prompt,
         "temperature": 0.7,
     }
-    
     result = make_request('/api/completions', 'POST', request_body)
-    
     print(f"Status: {result['status']}")
-    
     if result['status'] == 200 and 'content' in result['data']:
         print("\n=== Generated Content ===")
         print(result['data']['content'])
-        
         # Check if usage information is available
         if 'usage' in result['data'] and result['data']['usage']:
             usage = result['data']['usage']
@@ -200,19 +185,15 @@ def generate_completion():
 def generate_streaming_completion():
     """Generate a streaming completion"""
     print("\nGenerating a streaming completion...")
-    
     # Get available models first
     models_result = make_request('/api/models')
     available_models = models_result['data'].get('models', [])
-    
     if not available_models:
         print("No models available. Please check your API keys.")
         return
-    
     print("\nAvailable models:")
     for i, model in enumerate(available_models):
         print(f"{i + 1}. {model['name']} ({model['id']}) [{model['provider']}]")
-    
     model_index = input("\nSelect a model (number): ")
     try:
         index = int(model_index) - 1
@@ -222,69 +203,59 @@ def generate_streaming_completion():
     except ValueError:
         print("Invalid selection.")
         return
-    
     selected_model = available_models[index]
-    
     prompt = input("\nEnter your prompt: ")
     if not prompt.strip():
         print("Prompt cannot be empty.")
         return
-    
     print(f"\nGenerating streaming completion using {selected_model['name']}...")
     print("(Content will appear as it's generated)")
     print("\n=== Generated Content ===")
-    
     request_body = {
         "model": selected_model['id'],
         "prompt": prompt,
         "temperature": 0.7,
         "stream": True
     }
-    
     result = make_request('/api/completions', 'POST', request_body, stream=True)
-    
     if result['status'] != 200:
         print(f"Error: Status code {result['status']}")
         return
-    
     # Process the streaming response
     full_content = ""
     response = result['response']
-    
     try:
         for line in response.iter_lines():
             if not line:
                 continue
-            
             parsed = parse_sse_line(line)
             if not parsed:
                 continue
-            
             if 'done' in parsed and parsed['done']:
                 break
-            
             if 'error' in parsed:
                 print(f"\nError: {parsed['error']}")
                 continue
-            
             if 'data' in parsed:
                 chunk = parsed['data']
                 if 'content' in chunk:
                     content_delta = chunk['content']
                     full_content += content_delta
                     print(content_delta, end='', flush=True)
-                
                 if chunk.get('is_last_chunk', False):
                     print("\n\n=== Completion finished ===")
                     break
-        
         print("\n")  # Add a newline at the end
-        
     except KeyboardInterrupt:
         print("\n\nStreaming interrupted by user.")
-    except Exception as e:
-        print(f"\n\nError during streaming: {str(e)}")
-    
+    except requests.exceptions.ChunkedEncodingError as e:
+        print(f"\n\nConnection interrupted: {str(e)}")
+    except requests.exceptions.RequestException as e:
+        print(f"\n\nRequest error during streaming: {str(e)}")
+    except json.JSONDecodeError as e:
+        print(f"\n\nInvalid response format: {str(e)}")
+    except (KeyError, TypeError, ValueError) as e:
+        print(f"\n\nInvalid response data: {str(e)}")
     print(f"\nFull content length: {len(full_content)} characters")
 
 # Start the application

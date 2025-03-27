@@ -1,152 +1,287 @@
-from flask import Blueprint, request, jsonify, Response, stream_with_context
-from asgiref.sync import async_to_sync
-from src.services.ai_service import AIService
-from src.middlewares.error_handler import validate_request, handle_error
-from src.types.schemas import CompletionRequestSchema, ModelsRequestSchema
-import src.types.api as api_types
-from src.types.api import (
-    AIProvider
-)
-import json
+"""API route handlers for the AI service.
+
+This module defines the Flask Blueprint containing all API endpoints
+for model management, completions, and health checks.
+"""
+
 import asyncio
+import datetime
+import json
+from typing import Generator, List, Optional, Tuple, Union
+
+from asgiref.sync import async_to_sync
+from flask import Blueprint, Response, jsonify, request, stream_with_context
+
+from src.middlewares.error_handler import ApiError, handle_error, validate_request
+from src.services.ai_service import AIService
+from src.types.api import (
+    AIModel,
+    AIProvider,
+    DEEPSEEK_MODELS,
+    OPENAI_MODELS,
+    get_litellm_models,
+    get_openai_compatible_models,
+    get_all_models,
+)
+from src.types.schemas import CompletionRequestSchema
 
 # Create blueprint
 api_bp = Blueprint('api', __name__)
 
+
 @api_bp.route('/models', methods=['GET'])
-def get_models():
-    """Get list of available models"""
+def get_models() -> Tuple[dict, int]:
+    """Get list of available models.
+
+    Returns:
+        Tuple[dict, int]: JSON response with models and providers, and HTTP status code.
+    """
+    # Parse and validate query parameters
+    provider_param = request.args.get('provider')
+    provider: Optional[AIProvider] = None
+
+    if provider_param:
+        try:
+            provider = AIProvider(provider_param)
+        except ValueError:
+            return jsonify({
+                "error": {
+                    "message": f"Invalid provider: {provider_param}",
+                    "code": "INVALID_PROVIDER"
+                }
+            }), 400
+
     try:
-        # Parse and validate query parameters
-        provider = request.args.get('provider')
-        if provider:
-            try:
-                provider = AIProvider(provider)
-            except ValueError:
-                return jsonify({
-                    "error": {
-                        "message": f"Invalid provider: {provider}",
-                        "code": "INVALID_PROVIDER"
-                    }
-                }), 400
-        
         # Get available providers
         providers = async_to_sync(AIService.get_available_providers)()
-        
+
         # Get the latest models including any dynamically fetched ones
-        models = api_types.get_all_models()
-        
+        models = get_all_models()
+
         # Filter by provider if specified
         if provider:
             models = [model for model in models if model.provider == provider]
-        
+
         # Filter out models from unavailable providers
-        models = [model for model in models if (
-            (model.provider != AIProvider.OPENAI or providers["openai"]) and
-            (model.provider != AIProvider.DEEPSEEK or providers["deepseek"]) and
-            (model.provider != AIProvider.LITELLM or providers["litellm"]) and
-            (model.provider != AIProvider.OPENAI_COMPATIBLE or providers["openai_compatible"])
-        )]
-        
+        models = [
+            model for model in models
+            if ((model.provider != AIProvider.OPENAI or providers["openai"]) and
+                (model.provider != AIProvider.DEEPSEEK or providers["deepseek"]) and
+                (model.provider != AIProvider.LITELLM or providers["litellm"]) and
+                (model.provider != AIProvider.OPENAI_COMPATIBLE or
+                 providers["openai_compatible"]))
+        ]
+
         # Convert models to dict for JSON response
         models_json = [model.model_dump() for model in models]
-        
+
         return jsonify({
             "models": models_json,
             "providers": providers,
-        })
-    except Exception as e:
-        return handle_error(e)
+        }), 200
+
+    except (KeyError, ValueError) as e:
+        return handle_error(
+            ApiError(400, str(e), "INVALID_REQUEST")
+        )
+    except (ConnectionError, TimeoutError) as e:
+        return handle_error(
+            ApiError(503, f"Service unavailable: {str(e)}", "SERVICE_UNAVAILABLE")
+        )
+    except (TypeError, AttributeError) as e:
+        return handle_error(
+            ApiError(500, f"Internal server error: {str(e)}", "SERVER_ERROR")
+        )
+
 
 @api_bp.route('/providers', methods=['GET'])
-def get_providers():
-    """Get available AI providers"""
+def get_providers() -> Tuple[dict, int]:
+    """Get available AI providers.
+
+    Returns:
+        Tuple[dict, int]: JSON response with provider information and HTTP status code.
+    """
+    def get_provider_models(
+        models: List[AIModel],
+        is_available: bool
+    ) -> List[dict]:
+        """Helper to get models for a provider if available."""
+        if not is_available:
+            return []
+        return [model.model_dump() for model in models]
+
     try:
         providers = async_to_sync(AIService.get_available_providers)()
-        
+
         return jsonify({
             "providers": {
                 "openai": {
                     "available": providers["openai"],
-                    "models": [model.model_dump() for model in api_types.OPENAI_MODELS] if providers["openai"] else [],
+                    "models": get_provider_models(
+                        OPENAI_MODELS,
+                        providers["openai"]
+                    ),
                 },
                 "deepseek": {
                     "available": providers["deepseek"],
-                    "models": [model.model_dump() for model in api_types.DEEPSEEK_MODELS] if providers["deepseek"] else [],
+                    "models": get_provider_models(
+                        DEEPSEEK_MODELS,
+                        providers["deepseek"]
+                    ),
                 },
                 "litellm": {
                     "available": providers["litellm"],
-                    "models": [model.model_dump() for model in api_types.LITELLM_MODELS] if providers["litellm"] else [],
+                    "models": get_provider_models(
+                        get_litellm_models(),
+                        providers["litellm"]
+                    ),
                 },
                 "openai_compatible": {
                     "available": providers["openai_compatible"],
-                    "models": [model.model_dump() for model in api_types.OPENAI_COMPATIBLE_MODELS] if providers["openai_compatible"] else [],
+                    "models": get_provider_models(
+                        get_openai_compatible_models(),
+                        providers["openai_compatible"]
+                    ),
                 },
             },
-        })
-    except Exception as e:
-        return handle_error(e)
+        }), 200
+
+    except KeyError as e:
+        return handle_error(
+            ApiError(500, f"Missing provider configuration: {e}", "PROVIDER_ERROR")
+        )
+    except (ConnectionError, TimeoutError) as e:
+        return handle_error(
+            ApiError(503, f"Service unavailable: {str(e)}", "SERVICE_UNAVAILABLE")
+        )
+    except (TypeError, AttributeError) as e:
+        return handle_error(
+            ApiError(500, f"Internal server error: {str(e)}", "SERVER_ERROR")
+        )
+
+
+CompletionResponse = Union[Response, Tuple[dict, int]]
+
 
 @api_bp.route('/completions', methods=['POST'])
 @validate_request(CompletionRequestSchema)
-def generate_completion(validated_data):
-    """Generate a completion"""
+def generate_completion(validated_data: CompletionRequestSchema) -> CompletionResponse:
+    """Generate a completion.
+
+    Args:
+        validated_data: Validated completion request data.
+
+    Returns:
+        CompletionResponse: Streaming response or JSON response with completion.
+    """
     try:
-        # Check if streaming is requested
         if validated_data.stream:
             return stream_completion(validated_data)
-        
-        # Regular non-streaming completion
-        result = async_to_sync(AIService.generate_completion)(validated_data)
-        return jsonify(result.model_dump())
-    except Exception as e:
-        return handle_error(e)
 
-def stream_completion(validated_data):
-    """Stream a completion response"""
-    
-    def generate():
-        """Generator function that yields SSE formatted chunks"""
-        # Create a new event loop for this request
+        result = async_to_sync(AIService.generate_completion)(validated_data)
+        return jsonify(result.model_dump()), 200
+
+    except (ConnectionError, TimeoutError) as e:
+        return handle_error(
+            ApiError(503, f"Service unavailable: {str(e)}", "SERVICE_UNAVAILABLE")
+        )
+    except ValueError as e:
+        return handle_error(
+            ApiError(400, str(e), "INVALID_REQUEST")
+        )
+    except (KeyError, TypeError) as e:
+        return handle_error(
+            ApiError(400, f"Invalid request format: {str(e)}", "INVALID_FORMAT")
+        )
+    except (RuntimeError, AssertionError) as e:
+        print(f"Internal error in generate_completion: {e}")
+        return handle_error(
+            ApiError(500, "Internal server error", "SERVER_ERROR")
+        )
+
+
+def stream_completion(validated_data: CompletionRequestSchema) -> Response:
+    """Stream a completion response.
+
+    Args:
+        validated_data: Validated completion request data.
+
+    Returns:
+        Response: Streaming response with Server-Sent Events.
+    """
+    def generate() -> Generator[str, None, None]:
+        """Generate SSE formatted chunks.
+
+        Yields:
+            str: SSE formatted data chunks.
+        """
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-        
+
         try:
-            # Get the async generator
             async_gen = AIService.generate_stream(validated_data)
-            
-            # Process chunks one by one
+
             while True:
                 try:
-                    # Get the next chunk (run the coroutine in the event loop)
                     chunk = loop.run_until_complete(async_gen.__anext__())
-                    
-                    # Format the chunk as a Server-Sent Event
                     chunk_data = chunk.model_dump()
                     yield f"data: {json.dumps(chunk_data)}\n\n"
-                    
+
                 except StopAsyncIteration:
-                    # End of the stream
                     break
-                except Exception as e:
-                    # Handle errors in the stream
+                except (ConnectionError, TimeoutError) as e:
                     error_data = {
                         "error": {
-                            "message": str(e),
-                            "code": getattr(e, "code", "STREAM_ERROR") if hasattr(e, "code") else "STREAM_ERROR"
+                            "message": f"Service unavailable: {str(e)}",
+                            "code": "SERVICE_UNAVAILABLE"
                         }
                     }
                     yield f"data: {json.dumps(error_data)}\n\n"
                     break
-            
-            # End the stream
+                except json.JSONDecodeError as e:
+                    print(f"JSON encoding error in stream_completion: {e}")
+                    error_data = {
+                        "error": {
+                            "message": "Failed to encode response",
+                            "code": "ENCODING_ERROR"
+                        }
+                    }
+                    yield f"data: {json.dumps(error_data)}\n\n"
+                    break
+                except (KeyError, TypeError) as e:
+                    error_data = {
+                        "error": {
+                            "message": f"Invalid response format: {str(e)}",
+                            "code": "INVALID_RESPONSE"
+                        }
+                    }
+                    yield f"data: {json.dumps(error_data)}\n\n"
+                    break
+                except ValueError as e:
+                    error_data = {
+                        "error": {
+                            "message": f"Invalid data in response: {str(e)}",
+                            "code": "INVALID_DATA"
+                        }
+                    }
+                    yield f"data: {json.dumps(error_data)}\n\n"
+                    break
+                except (AttributeError, RuntimeError, AssertionError) as e:
+                    print(f"Internal error in stream_completion: {e}")
+                    error_data = {
+                        "error": {
+                            "message": "Internal server error",
+                            "code": "SERVER_ERROR"
+                        }
+                    }
+                    yield f"data: {json.dumps(error_data)}\n\n"
+                    break
+
             yield "data: [DONE]\n\n"
-            
+
         finally:
-            # Clean up the event loop
             loop.close()
-    
-    # Create a streaming response
+
     return Response(
         stream_with_context(generate()),
         mimetype='text/event-stream',
@@ -157,16 +292,32 @@ def stream_completion(validated_data):
         }
     )
 
+
 @api_bp.route('/health', methods=['GET'])
-def health_check():
-    """Health check endpoint"""
+def health_check() -> Tuple[dict, int]:
+    """Health check endpoint.
+
+    Returns:
+        Tuple[dict, int]: JSON response with health status and HTTP status code.
+    """
     try:
         providers = async_to_sync(AIService.get_available_providers)()
-        
+
         return jsonify({
             "status": "ok",
-            "timestamp": __import__('datetime').datetime.now().isoformat(),
+            "timestamp": datetime.datetime.now().isoformat(),
             "providers": providers,
-        })
-    except Exception as e:
-        return handle_error(e)
+        }), 200
+
+    except (ConnectionError, TimeoutError) as e:
+        return handle_error(
+            ApiError(503, f"Service unavailable: {str(e)}", "SERVICE_UNAVAILABLE")
+        )
+    except (KeyError, ValueError) as e:
+        return handle_error(
+            ApiError(500, f"Invalid provider configuration: {str(e)}", "CONFIG_ERROR")
+        )
+    except (TypeError, AttributeError) as e:
+        return handle_error(
+            ApiError(500, f"Internal server error: {str(e)}", "SERVER_ERROR")
+        )
