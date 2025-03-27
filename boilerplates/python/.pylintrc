@@ -1,0 +1,31 @@
+[MASTER]
+# Add the src directory to the Python path so pylint can find our modules
+init-hook='import sys; sys.path.append("boilerplates/python")'
+
+# Use multiple processes to speed up Pylint
+jobs=0
+
+[MESSAGES CONTROL]
+# Disable specific warnings
+disable=
+    too-few-public-methods,  # Disabled because Pydantic models often have few public methods
+    import-error,  # Temporarily disabled until we fix the import issues in CI
+
+[FORMAT]
+# Maximum number of characters on a single line
+max-line-length=100
+
+[REPORTS]
+# Set the output format
+output-format=text
+
+# Include a brief explanation of each error
+msg-template={path}:{line}: [{msg_id}({symbol}), {obj}] {msg}
+
+[BASIC]
+# Regular expression which should only match function or class names
+good-names=i,j,k,ex,Run,_,id
+
+[MISCELLANEOUS]
+# List of note tags to take into consideration
+notes=FIXME,XXX,TODO

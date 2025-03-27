@@ -18,6 +18,9 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install pylint
+        cd boilerplates/python
+        pip install -r requirements.txt
     - name: Analysing the code with pylint
       run: |
-        pylint $(git ls-files 'boilerplates/python/*.py')
+        cd boilerplates/python
+        pylint $(find . -type f -name "*.py")
