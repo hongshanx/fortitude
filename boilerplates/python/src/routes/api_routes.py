@@ -299,6 +299,61 @@ def stream_completion(validated_data: CompletionRequestSchema) -> Response:
     )
 
 
+def scrape_market_data(ticker: str) -> Tuple[str, str, float, Optional[float], Optional[float]]:
+    """Scrape market data from Bing and Yahoo Finance.
+
+    Args:
+        ticker: Stock ticker symbol.
+
+    Returns:
+        Tuple containing bing_text, market_data_str, price_change, current_price, prev_close.
+    """
+    # Scrape Bing
+    bing_url = f"https://www.bing.com/search?q={ticker}+stock+analysis+prediction"
+    bing_headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+    }
+    bing_response = requests.get(bing_url, headers=bing_headers, timeout=10)
+    bing_soup = BeautifulSoup(bing_response.text, 'html.parser')
+    bing_results = bing_soup.find_all('p')
+    bing_text = ' '.join([p.get_text() for p in bing_results[:3]])
+
+    # Scrape Yahoo Finance
+    yahoo_url = f"https://finance.yahoo.com/quote/{ticker}"
+    yahoo_headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+    }
+    yahoo_response = requests.get(yahoo_url, headers=yahoo_headers, timeout=10)
+    yahoo_soup = BeautifulSoup(yahoo_response.text, 'html.parser')
+
+    # Initialize variables
+    current_price = None
+    prev_close = None
+    price_change = 0.0
+    market_data_str = "Unable to fetch current market data"
+
+    # Try to get current price and previous close
+    try:
+        current_price = float(yahoo_soup.find(
+            'fin-streamer',
+            {'data-field': 'regularMarketPrice'}
+        ).text.replace(',', ''))
+        prev_close = float(yahoo_soup.find(
+            'td',
+            {'data-test': 'PREV_CLOSE-value'}
+        ).text.replace(',', ''))
+        price_change = ((current_price - prev_close) / prev_close) * 100
+        market_data_str = (
+            f"Current price: ${current_price:.2f}\n"
+            f"Previous close: ${prev_close:.2f}\n"
+            f"Price change: {price_change:.1f}%"
+        )
+    except (AttributeError, ValueError, TypeError):
+        pass
+
+    return bing_text, market_data_str, price_change, current_price, prev_close
+
+
 @api_bp.route('/predict/stock', methods=['POST'])
 @validate_request(StockPredictionRequestSchema)
 def predict_stock(validated_data: StockPredictionRequestSchema) -> Tuple[dict, int]:
@@ -312,57 +367,25 @@ def predict_stock(validated_data: StockPredictionRequestSchema) -> Tuple[dict, i
     """
     try:
         ticker = validated_data.ticker.upper()
-        
-        # Initialize variables
-        current_price = None
-        prev_close = None
-        price_change = 0.0
-        market_data = ""
-        
-        # Scrape Bing
-        bing_url = f"https://www.bing.com/search?q={ticker}+stock+analysis+prediction"
-        bing_headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        }
-        bing_response = requests.get(bing_url, headers=bing_headers, timeout=10)
-        bing_soup = BeautifulSoup(bing_response.text, 'html.parser')
-        bing_results = bing_soup.find_all('p')
-        bing_text = ' '.join([p.get_text() for p in bing_results[:3]])
 
-        # Scrape Yahoo Finance
-        yahoo_url = f"https://finance.yahoo.com/quote/{ticker}"
-        yahoo_headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        }
-        yahoo_response = requests.get(yahoo_url, headers=yahoo_headers, timeout=10)
-        yahoo_soup = BeautifulSoup(yahoo_response.text, 'html.parser')
-        
-        # Try to get current price and previous close
-        try:
-            current_price = float(yahoo_soup.find('fin-streamer', {'data-field': 'regularMarketPrice'}).text.replace(',', ''))
-            prev_close = float(yahoo_soup.find('td', {'data-test': 'PREV_CLOSE-value'}).text.replace(',', ''))
-            price_change = ((current_price - prev_close) / prev_close) * 100
-            market_data = f"Current price: ${current_price:.2f}\nPrevious close: ${prev_close:.2f}\nPrice change: {price_change:.1f}%"
-        except (AttributeError, ValueError, TypeError):
-            market_data = "Unable to fetch current market data"
-
+        # Scrape market data
+        bing_text, market_data_str, _, _, _ = scrape_market_data(ticker)
+        print('bing_text:', bing_text)
+        print('market_data_str:', market_data_str)
         # Prepare prompt for AI analysis
-        prompt = f"""Analyze the following stock information and predict whether the stock price will go up or down. 
-        Return your response in this exact format:
-        {{
-            "prediction": "up" or "down",
-            "confidence": <float between 0 and 1>,
-            "summary": "<brief explanation>"
-        }}
-
-        Stock: {ticker}
-        Market Data: {market_data}
-        Market analysis from Bing: {bing_text}
-        """
+        prompt = (
+            f"Analyze the following stock information and predict whether the "
+            f"stock price will go up or down.\nReturn your response in this exact format:\n"
+            f'{{\n    "prediction": "up" or "down",\n    "confidence": <float between '
+            f'0 and 1>,\n    "summary": "<brief explanation>"\n}}\n\n'
+            f"Stock: {ticker}\n"
+            f"Market Data: {market_data_str}\n"
+            f"Market analysis from Bing: {bing_text}"
+        )
 
         # Use AI service for prediction with DeepSeek V3
         completion_request = CompletionRequestSchema(
-            model="deepseek-v3",  # Using OpenAI-compatible DeepSeek V3
+            model="deepseek-v3",
             prompt=prompt,
             max_tokens=500,
             temperature=0.7,
@@ -370,11 +393,11 @@ def predict_stock(validated_data: StockPredictionRequestSchema) -> Tuple[dict, i
         )
 
         result = async_to_sync(AIService.generate_completion)(completion_request)
-        
+
         try:
             # Parse AI response
             ai_response = json.loads(result.content)
-            
+
             # Create response
             response = StockPredictionResponseSchema(
                 ticker=ticker,
@@ -399,7 +422,7 @@ def predict_stock(validated_data: StockPredictionRequestSchema) -> Tuple[dict, i
         return handle_error(
             ApiError(400, f"Failed to parse stock data: {str(e)}", "INVALID_DATA")
         )
-    except Exception as e:
+    except (RuntimeError, AssertionError) as e:
         print(f"Unexpected error in predict_stock: {e}")
         return handle_error(
             ApiError(500, "Internal server error", "SERVER_ERROR")

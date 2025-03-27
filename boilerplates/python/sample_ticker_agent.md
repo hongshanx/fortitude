@@ -32,7 +32,7 @@ python main.py
 ```bash
 curl -X POST http://localhost:3000/api/predict/stock \
   -H "Content-Type: application/json" \
-  -d '{"ticker": "AAPL"}'
+  -d '{"ticker": "NVDA"}'
 ```
 
 ## 开发指南
