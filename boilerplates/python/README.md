@@ -14,7 +14,7 @@ A Python Flask API server that connects to OpenAI, DeepSeek, and LiteLLM AI mode
 
 ## Tech Stack
 
-- Python 3.9+
+- Python 3.10.6+
 - Flask
 - Flask-CORS
 - Pydantic for validation
@@ -24,7 +24,7 @@ A Python Flask API server that connects to OpenAI, DeepSeek, and LiteLLM AI mode
 
 ## Prerequisites
 
-- Python 3.9+ installed
+- Python 3.10.6+ installed
 - OpenAI API key (optional)
 - DeepSeek API key (optional)
 - LiteLLM API key (optional)
